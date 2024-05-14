@@ -99,3 +99,32 @@ The Language Server Protocol makes it easy to leverage `rust-analyzer` in many d
 
 ### Ready-to-go CI Pipelines
 * It is often easier to tweak an existing CI pipeline to fit our needs than to create one from scratch.
+
+# Ch2 - Building An Email Newsletter
+
+## Our Driving Example
+
+### Problem-based Learning
+* Choose a problem you want to solve. Let the problem drive the introduction of new concepts and techniques.
+
+## What Should Our Newsletter Do?
+* We will try to build an email newsletter service that supports what you need to get off the ground if you are willing to add an email subscription page to your blog.
+
+### Capturing Requirements: User Stories
+1. As a blog visitor, I want to subscribe to the newsletter, so that I can receive email updates when new content is published on the blog.
+2. As the blog author, I want to send an email to all my subscribers, so that I can notify them when new content is published.
+
+* We will not add features to
+1. unsubscribe
+2. manage multiple newsletters
+3. segment subscribers in multiple audiences
+4. track opening and click rates
+
+## Working in Iterations
+* Instead of going deep on one story, on details like do we need authentication, do we support HTML and emojis in the emails, we will build enough functionality to satisfy the requirements of all of our stories in our first release.
+* Then, we go back and improve: add fault-tolerance and retries for email delivery, add a confirmation email for new subscribers, etc.
+* We will work in iterations: each iteration takes a fixed amount of time and gives us a slightly better version of the product, improving the experience of our users.
+* We are iterating on product features, not engineering quality: the code produced in each iteration will be tested and properly documented even if it only delivers a tiny, fully functional feature.
+
+### Coming Up
+* Getting off the ground will require some initial heavy-lifting: choosing a web framework, setting up the infrastructure for managing database migrations, putting together our application scaffolding as well as our setup for integration testing.

@@ -20,3 +20,82 @@
 * To handle dynamic workloads, we should be able to measure if our system is under load and throw more compute at the problem by spinning up new instances of the application.
   * This also requires our infrastructure to be elastic to avoid over-provisioning.
   * Running a replicated application influences our approach to data persistence - we will avoid using the local filesystem as our primary storage solution, relying instead on databases for our persistence needs.
+
+# Ch1 - Getting Started
+* Tooling should be treated as a first-class concern both when designing and teaching the language itself.
+* `rustup` is more than a Rust installer - its main value proposition is *toolchain management*.
+  * A toolchain is the combination of a *compilation target* and a *release channel*.
+
+## Installing The Rust Toolchain
+
+### Compilation Targets
+* The Rust compiler converts Rust code into machine code therefore you need a different backend of the Rust compiler for each compilation target, i.e. for each platform (e.g. 64-bit Linux or 64-bit OSX) you want to produce a running executable for.
+  
+### Release Channels
+* The Rust compiler itself is a living piece of software: it continuously evolves and improves.
+* The Rust project strives for *stability without stagnation*.
+* Two other release channels: `beta` & `nightly`.
+
+### What Toolchains Do We Need?
+* We will perform any cross-compiling - our production workloads will be running in containers, hence we do not need to cross-compile from our development machine to the target host used in our production environment.
+
+## Project Setup
+* `cargo new zero2prod`
+
+## IDEs
+* You have two main options for your IDE setup: rust-analyzer and IntelliJ Rust.
+* `rust-analyzer` is an implementation of the Language Server Protocol for Rust.
+The Language Server Protocol makes it easy to leverage `rust-analyzer` in many different editors.
+* IntelliJ Rust provides Rust support to the suite of editors developed by JetBrains.
+
+## Inner Development Loop
+* While working on our project, we will be going through the same steps over and over again, aka inner development loop:
+ - Make a change
+ - Compile the application
+ - Run tests
+ - Run the application
+
+### Faster Linking
+* A sizeable chunk of time is spent in the **linking** phase when are doing incremental builds.
+* The default linker does a good job, but there is a faster one by the LLVM project: `lld`.
+* See `.cargo/config.toml` to see how to install and add configuration to use `lld`.
+
+### cargo-watch
+* We can use `cargo-watch` to reduce the perceived compilation time - i.e. the time you spend looking at your terminal waiting for cargo check or cargo run to complete.
+* `cargo watch -x check` monitors your source code to trigger commands like `cargo check` (in this case) every time a file changes.
+* We can also do `cargo watch -x check -x test -x run` to chain 3 commands together that `cargo check`, `cargo test`, and `cargo run` each time our code changes.
+
+## Continous Integration
+* In trunk-based development we should be able to deploy our `main` branch at any point in time.
+* Every member of the team can branch off from `main`, develop a small feature or fix a bug, merge back into `main` and release to our users.
+* CI also provides a tighter feedback loop.
+
+### CI Steps
+
+#### Tests
+* If our CI pipeline had only 1 step, it should be `cargo test`.
+
+#### Code Coverage
+* While using code coverage as a quality check has several drawbacks I do argue that it is a quick way to collect information and spot if some portions of the codebase have been overlooked over time and are indeed poorly tested.
+* `cargo install cargo-tarpaulin`
+* `cargo tarpaulin --ignore-tests` computes code coverage for your application code, ignoring test functions.
+
+#### Linting
+* A **linter** will try to spot unidiomatic code, overly-complex constructs and common mistakes/inefficiencies to avoid convoluted solutions to problems that could be tackled with a much simpler approach.
+* The official Rust linter is `clippy`, which can be installed via `rustup component add clippy` and can be run with `cargo clippy` and we can have it fail in the CI `cargo clippy -- -D warnings`.
+* From time to time clippy might suggest changes that you do not believe to be either correct or desirable.
+  * You can mute a warning using the `#[allow(clippy::lint_name)]` attribute on the affected code block or disable the noisy lint altogether for the whole project with a configuration line in `clippy.toml` or a project-level `#![allow(clippy::lint_name)]` directive.
+
+#### Formatting
+* Let machines deal with formatting.
+* The official rust formatter is `rustfmt`, which can be installed with `rustup component add rustfmt`, run locally with `cargo fmt`, and can be run in CI `cargo fmt -- --check`.
+* You can tune `rustfmt` for a project with a configuration file, `rustfmt.toml`.
+
+#### Security Vulnerabilities
+* The Rust Secure Code working group maintains an Advisory Database - an up-to-date collection of reported vulnerabilities for crates published on crates.io.
+* `cargo-audit` checks if vulnerabilities have been reported for any of the crates in the dependency tree of your project.
+* It can be installed with `cargo install cargo-audit` and ran with `cargo audit`.
+* In addition to running `cargo-audit` in the CI on every commit, we will also run it on a daily schedule to stay on top of new vulnerabilities for dependencies of projects that we might not be actively working on at the moment but are still running in our production environment.
+
+### Ready-to-go CI Pipelines
+* It is often easier to tweak an existing CI pipeline to fit our needs than to create one from scratch.

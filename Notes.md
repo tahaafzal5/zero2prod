@@ -128,3 +128,21 @@ The Language Server Protocol makes it easy to leverage `rust-analyzer` in many d
 
 ### Coming Up
 * Getting off the ground will require some initial heavy-lifting: choosing a web framework, setting up the infrastructure for managing database migrations, putting together our application scaffolding as well as our setup for integration testing.
+
+# Ch3 - Sign Up a New Subscriber
+
+* For the first user story, we expect our blog visitors to input their email address in a form embedded on a web page.
+* The form will trigger an API call to a backend server that will actually process the information, store it and send back a response.
+* This chapter will focus on that backend server - we will implement the `/subscriptions` POST endpoint.
+
+## Our Strategy
+* When starting a new project from scratch - there is a fair amount of upfront heavy-lifting we need to do:
+  1. choose a web framework and get familiar with it
+  2. define our testing strategy
+  3. choose a crate to interact with our database
+  4. define how we want to manage changes to our database schemas over time (a.k.a. migrations)
+  5. actually write some queries
+* Before tackling `/subscriptions` we will implement a `/health_check` endpoint.
+  * No business logic, but a good opportunity to learn the web framework and understand of all its different moving parts.
+
+## Choosing A Web Framework

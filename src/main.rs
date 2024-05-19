@@ -17,7 +17,6 @@ async fn main() -> Result<(), std::io::Error> {
         configuration.application_port
     ));
 
-    let configuration = get_configuration().expect("Failed to read configuration");
     let connection_string = configuration.database.connection_string();
     let connection_pool = PgPool::connect(&connection_string)
         .await

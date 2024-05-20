@@ -2,7 +2,7 @@ use sqlx::{Connection, Executor, PgConnection, PgPool};
 use std::net::TcpListener;
 use uuid::Uuid;
 use zero2prod::configuration::{get_configuration, DatabaseSettings};
-use zero2prod::routes::health_check_route;
+use zero2prod::routes::{health_check_route, subscriptions_route};
 use zero2prod::startup::run;
 
 pub struct TestApp {
@@ -33,7 +33,7 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
     let app = spawn_app().await;
     let client = reqwest::Client::new();
 
-    let request = format!("{}/subscriptions", app.address);
+    let request = format!("{}{}", app.address, subscriptions_route());
     let body = format!("name=Taha%20Afzal&email=tahaafzal5%40hotmail.com");
     let response = client
         .post(request)
@@ -59,7 +59,7 @@ async fn subscribe_returns_a_400_when_data_is_missing() {
     let app = spawn_app().await;
     let client = reqwest::Client::new();
 
-    let request = format!("{}/subscriptions", app.address);
+    let request = format!("{}{}", app.address, subscriptions_route());
 
     let test_cases = vec![
         ("name=le%20guin", "missing the email"),

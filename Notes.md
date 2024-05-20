@@ -391,8 +391,8 @@ down all tasks spawned on it are dropped.
   * it deals with the fact that the request body arrives a chunk at a time as a stream of bytes
   * etc
 * The key passage, after all those things have been taken care of, is: `serde_urlencoded::from_bytes::<T>(&body).map_err(|_| UrlencodedError::Parse)`
-  * `serde_urlencoded` provides (de)serialisation support for the `application/x-www-form-urlencoded` data format.
-  * `from_bytes` takes as input a contiguous slice of bytes and it deserialises an instance of type `T` from it according to the rules of the URL-encoded format: the keys and values are encoded in key-value tuples separated by `&`, with a `=` between the key and the value; non-alphanumeric characters in both keys and values are percent encoded.
+  * `serde_urlencoded` provides (de)serialization support for the `application/x-www-form-urlencoded` data format.
+  * `from_bytes` takes as input a contiguous slice of bytes and it deserializes an instance of type `T` from it according to the rules of the URL-encoded format: the keys and values are encoded in key-value tuples separated by `&`, with a `=` between the key and the value; non-alphanumeric characters in both keys and values are percent encoded.
 * `#[derive(Serialize)]` and `#[derive(Deserialize)]` procedural macros, bundled with `serde` behind the derive feature flag, will parse the definition of your type and automatically generate for you the right `Serialize/Deserialize` implementation.
   * Generically: once your type implements `Serialize`, you are then free to use any concrete implementation of Serializer to actually perform the serialization step - i.e. you can serialize your type to any format for which there is an available `Serializer` implementation on crates.io. Same is true for `Deserialize` and `Deserializer`.
   * Efficiently: thanks to *monomorphization*, we don't pay any runtime cost for using generics.

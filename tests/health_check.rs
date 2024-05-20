@@ -104,7 +104,7 @@ async fn spawn_app() -> TestApp {
 
     TestApp {
         address,
-        connection_pool: connection_pool,
+        connection_pool,
     }
 }
 

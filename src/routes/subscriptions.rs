@@ -9,7 +9,10 @@ pub struct FormData {
     email: String,
 }
 
-pub async fn subscribe(form: web::Form<FormData>, pool: web::Data<PgPool>) -> HttpResponse {
+pub async fn subscribe(
+    form: web::Form<FormData>,
+    connection_pool: web::Data<PgPool>,
+) -> HttpResponse {
     match sqlx::query!(
         "INSERT INTO subscriptions (id, email, name, subscribed_at) VALUES ($1, $2, $3, $4)",
         Uuid::new_v4(),
@@ -19,7 +22,7 @@ pub async fn subscribe(form: web::Form<FormData>, pool: web::Data<PgPool>) -> Ht
     )
     // We use `get_ref` to get an immutable reference to the `PgConnection`
     // wrapped by `web::Data`.
-    .execute(pool.get_ref())
+    .execute(connection_pool.get_ref())
     .await
     {
         Ok(_) => HttpResponse::Ok().finish(),

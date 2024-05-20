@@ -6,7 +6,7 @@ use zero2prod::startup::run;
 
 pub struct TestApp {
     pub address: String,
-    pub db_pool: PgPool,
+    pub connection_pool: PgPool,
 }
 
 // `tokio::test` is the testing equivalent of `tokio::main`.
@@ -45,7 +45,7 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
     assert!(response.status().is_success());
 
     let saved = sqlx::query!("SELECT email, name FROM subscriptions")
-        .fetch_one(&app.db_pool)
+        .fetch_one(&app.connection_pool)
         .await
         .expect("Failed to fetch saved subscription");
 
@@ -103,7 +103,7 @@ async fn spawn_app() -> TestApp {
 
     TestApp {
         address,
-        db_pool: connection_pool,
+        connection_pool: connection_pool,
     }
 }
 

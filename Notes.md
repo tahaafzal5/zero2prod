@@ -77,6 +77,32 @@
     - [The `Data` Extractor](#the-data-extractor)
     - [The `INSERT` Query](#the-insert-query)
     - [Test Isolation](#test-isolation)
+- [Ch4 - Telemetry](#ch4---telemetry)
+  - [Unknown Unknowns](#unknown-unknowns)
+  - [Observability](#observability)
+  - [Logging](#logging)
+    - [The `log` crate](#the-log-crate)
+    - [`actix-web`'s `Logger` Middleware](#actix-webs-logger-middleware)
+    - [The Facade Pattern](#the-facade-pattern)
+  - [Instrumenting POST /subscriptions](#instrumenting-post-subscriptions)
+    - [Interactions With External Systems](#interactions-with-external-systems)
+    - [Think Like A User](#think-like-a-user)
+    - [Logs Must Be Easy to Correlate](#logs-must-be-easy-to-correlate)
+  - [Structured Logging](#structured-logging)
+    - [The `tracing` crate](#the-tracing-crate)
+    - [Migration From `log` to `tracing`](#migration-from-log-to-tracing)
+    - [`tracing`'s Span](#tracings-span)
+    - [Instrumenting Futures](#instrumenting-futures)
+    - [`tracing`'s Subscriber](#tracings-subscriber)
+    - [`tracing-subscriber`](#tracing-subscriber)
+    - [`tracing-bunyan-formatter`](#tracing-bunyan-formatter)
+    - [`tracing-log`](#tracing-log)
+    - [Removing Unused Dependencies](#removing-unused-dependencies)
+    - [Logs For Integration Tests](#logs-for-integration-tests)
+    - [Cleaning Up Instrumentation Code - tracing::instrument](#cleaning-up-instrumentation-code---tracinginstrument)
+    - [Protect Your Secrets - `secrecy`](#protect-your-secrets---secrecy)
+    - [Request Id](#request-id)
+    - [Leveraging The `tracing` Ecosystem](#leveraging-the-tracing-ecosystem)
 
 # Preface
 
@@ -580,3 +606,179 @@ down all tasks spawned on it are dropped.
   * create a new logical database with a unique name
   * run database migrations on it
 * We will go with option 2 and the best way to do this would be in `spawn_app` before launching our `actix-web` test application.
+
+# Ch4 - Telemetry
+  
+## Unknown Unknowns
+* A test suite is not proof of the correctness of our application.
+* We would have to explore significantly different approaches to prove that something is correct.
+* A few blind spots we can encounter are:
+  * what happens if we lose connection to the database? Does `sqlx::PgPool` try to automatically recover or will all database interactions fail from that point onwards until we restart the application?
+  * what happens if an attacker tries to pass malicious payloads in the body of the `POST/subscriptions` request (i.e. extremely large payloads, SQL injection, etc.)
+* Unknown unknowns might emerge when:
+  * the system is pushed outside of its usual operating conditions (e.g.an unusual spike of traffic)
+  * multiple components experience failures at the same time (e.g.a SQL transaction is left hanging while the database is going through a master-replica failover
+  * a change is introduced that moves the system equilibrium (e.g. tuning a retry policy)
+  * no changes have been introduced for a long time (e.g. applications have not been restarted for weeks and you start to see memory leaks);
+* These scenarios might be hard/impossible to reproduce outside of a live environment.
+
+## Observability
+* One of the things we can rely on to understand and debug an unknown unknown is **telemetry data**: information about our running applications that is collected automatically and can be later inspected to answer questions about the state of the system at a certain point in time.
+  > Observability is about being able to ask arbitrary questions about your environment without having to know ahead of time what you wanted to ask.
+
+## Logging
+* A **log record** is usually a bunch of text data, with a line break to separate the current record from the next one.
+
+### The `log` crate
+* The go-to crate for logging in Rust is `log`.
+  * `log` provides five macros: `trace`, `debug`, `info`, `warn` and `error`.
+* *trace* is the lowest level: they are are often extremely verbose and have a low signal-to-noise ratio (e.g. emit a trace-level log record every time a TCP packet is received by a web server).
+* *Error* is the highest level and us used to report serious failures that might have user impact (e.g. we failed to handle an incoming request or a query to the database timed out).
+* We can use `log`’s macros to *instrument* our codebase.
+
+### `actix-web`'s `Logger` Middleware
+* `actix_web` provides a `Logger` middleware. It emits a log record for every incoming request.
+
+### The Facade Pattern
+* The `log` crate leverages the facade pattern to handle questions like what the application should do with the log records?
+  * Append them to a file?
+  * Print them to the terminal?
+  * Send them to a remote system over HTTP (e.g. ElasticSearch)?
+* `log` gives you the tools you need to emit log records, but it does not *prescribe* how those log records should be processed. 
+* At the beginning of your main function you can call the `set_logger` function and pass an implementation of the `Log` trait: every time a log record is emitted `Log::log` will be called on the `logger` you provided, therefore making it possible to perform whatever form of processing of log records you deem necessary.
+* If you do not call `set_logger`, then all log records will simply be discarded.
+  * `init` calls `set_logger`.
+* We will use `env_logger` crate, which prints log records to the terminal in the following format: `[<timestamp> <level> <module path>] <log message>`.
+* It looks at the `RUST_LOG` environment variable to determine what logs should be printed and what logs should be filtered out.
+  * `RUST_LOG=debug cargo run`will surface all logs at debug-level or higher emitted by our application or the crates we are using.
+  * `RUST_LOG=zero2prod`, instead, would filter out all records emitted by our dependencies.
+
+## Instrumenting POST /subscriptions
+* We will add the `log` crate as a dependency.
+
+### Interactions With External Systems
+* A tried-and-tested rule of thumb is: any interaction with external systems over the network should be closely monitored.
+* We might experience networking issues, the database might be unavailable, queries might get slower over time as the subscribers table gets longer, etc.
+
+### Think Like A User
+* We should capture what we are trying to do so we can look up the user's information in the logs to debug issues. We add a `log::info!` to our `subscribe` function.
+
+### Logs Must Be Easy to Correlate
+* If we are handling multiple requests concurrently, our current logging might not be able to correspond to a user's actions as there might be multiple users interacting with our server at the same time.
+* We add a `request_id` to the logs and can see them using `curl -i -X POST -d 'email=thomas_mann@hotmail.com&name=Tom' http://127.0.0.1:8000/subscriptions`.
+* We can then grab the `request_id` for Tom and search for it, but `request_id` is created in our `subscribe` handler, therefore `actix_web`’s Logger middleware is completely unaware of it.
+  * That means that we will not know what status code our application has returned to the user when they tried to subscribe to our newsletter.
+  
+## Structured Logging
+* To ensure that `request_id` is included in all log records we would have to:
+  * rewrite all upstream components in the request processing pipeline (e.g. `actix-web`’s Logger);
+  * change the signature of all downstream functions we are calling from the `subscribe` handler; if they are emitting a log statement, they need to include the `request_id`, which therefore needs to be passed down as an argument.
+* What about log records emitted by the crates we are importing into our project? Should we rewrite those as well? It is clear that this approach cannot scale because `log` is the wrong abstraction.
+
+### The `tracing` crate
+> `tracing` expands upon logging-style diagnostics by allowing libraries and applications to record structured events with additional information about temporality and causality — unlike a log message, a span in tracing has a beginning and end time, may be entered and exited by the flow of execution, and may exist within a nested tree of similar spans.
+
+### Migration From `log` to `tracing`
+* `tracing`'s `log` feature flag  ensures that every time an event or a span are created using `tracing`’s macros a corresponding `log` event is emitted, allowing `log`’s loggers to pick up on it (`env_logger`, in our case).
+  
+### `tracing`'s Span
+* We can now start to leverage `tracing`’s `Span` to better capture the structure of our program. We want to create a span that represents the whole HTTP request.
+* We use the `info_span!` macro to create a new span and attach some values to its context: `request_id`, `form.email` and `form.name`.
+* We are not using string interpolation anymore: `tracing` allows us to associate structured information to our spans as a collection of key-value pairs.
+  * We can explicitly name them (e.g. `subscriber_email` for `form.email`) or implicitly use the variable name as key (e.g. the isolated `%request_id` is equivalent to `request_id = request_id`).
+  * We prefixed all of them with `%`: we are telling tracing to use their `Display` implementation for logging purposes.
+* `info_span` returns the newly created span, but we have to explicitly step into it using the `.enter()` method to activate it.
+* `.enter()` returns an instance of `Entered`, a *guard*: as long the guard variable is not dropped all downstream spans and log events will be registered as children of the entered span.
+* This is a typical Rust pattern, often referred to as Resource Acquisition Is Initialization (**RAII**): the compiler keeps track of the lifetime of all variables and when they go out of scope it inserts a call to their destructor, `Drop::drop`.
+* We can closely follow the lifetime of our span using the emitted logs:
+  * "Adding a new subscriber" is logged when the span is created
+  * We enter the span `->`
+  * We execute the INSERT query
+  * We exit the span `<-`
+  * We finally close the span `--`
+* You can enter (and exit) a span multiple times.
+* Closing a span, instead, is final: it happens when the span itself is dropped.
+* This comes pretty handy when you have a unit of work that can be paused and then resumed e.g. an asynchronous task.
+
+### Instrumenting Futures
+* Looking at our database query as an example, the executor might have to poll its future more than once to drive it to completion - while that future is idle, we are going to make progress on other futures.
+* This can cause issues: how do we make sure we don’t mix their respective spans?
+  * The best way would be to closely mimic the future’s lifecycle: we should enter into the span associated to our future every time it is polled by the executor and exit every time it gets parked.
+* That’s where `Instrument` comes into the picture.
+  * It is an extension trait for futures.
+  * `Instrument::instrument` enters the span we pass as argument every time self, the future, is polled; it exits the span every time the future is parked.
+* Now, if we launch the application with `RUST_LOG=TRACE cargo run` and try a `POST /subscriptions` request, we will see how many times the query future has been polled by the executor before completing.
+
+### `tracing`'s Subscriber
+* But the above only prints the `request_id` on the very first log where we attach it explicitly to the span context.
+  * This is because we are still using `env_logger` to process everything.
+  * `env_logger`'s logger implements `log`'s `Log` trait and it knows nothing about `tracing`'s `Span`.
+* The `tracing` crate follows the same facade pattern used by `log` - you can freely use its macros to instrument your code, but applications are in charge to spell out how that span telemetry data should be processed.
+* `Subscriber` is the tracing counterpart of `log`’s `Log`: an implementation of the `Subscriber` trait exposes a variety of methods to manage every stage of the lifecycle of a `Span` - creation, enter/exit, closure, etc.
+
+### `tracing-subscriber`
+* `tracing` does not provide any subscriber out of the box.
+* We need to look into `tracing-subscriber`, another crate maintained in-tree by the `tracing` project, to find a few basic subscribers to get off the ground, which we can do by adding it as a dependency.
+* `tracing-subscriber` does much more than providing us with a few handy subscribers.
+* It introduces another key trait into the picture, `Layer`.
+  * `Layer` makes it possible to build a processing pipeline for spans data: we are not forced to provide an all-encompassing subscriber that does everything we want; we can instead combine multiple smaller layers to obtain the processing pipeline we need.
+  * This substantially reduces duplication across in `tracing` ecosystem: people are focused on adding new capabilities by churning out new layers rather than trying to build the best-possible-batteries-included subscriber.
+* The cornerstone of the layering approach is `Registry`, which implements the `Subscriber` trait and takes care of all the difficult stuff:
+  > `Registry` does not actually record traces itself: instead, it collects and stores span data that is exposed to any layer wrapping it [...]. The `Registry` is responsible for storing span metadata, recording relationships between spans, and tracking which spans are active and which are closed.
+* Downstream layers can piggyback on `Registry`’s functionality and focus on their purpose: filtering what spans should be processed, formatting span data, shipping span data to remote systems, etc.
+
+### `tracing-bunyan-formatter`
+* Everything we attached to the original context has been propagated to all its sub-spans.
+* `tracing-bunyan-formatter` also provides duration out-of-the-box: every time a span is closed a JSON message is printed to the console with an `elapsed_millisecond` property attached to it.
+* The JSON format is extremely friendly when it comes to searching: an engine like ElasticSearch can easily ingest all these records, infer a schema and index the `request_id`, `name` and `email` fields. It unlocks the full power of a querying engine to sift through our logs!
+* This is exponentially better than we had before: to perform complex searches we would have had to use custom-built regexes, therefore limiting considerably the range of questions that we could easily ask to our logs.
+
+### `tracing-log`
+* `tracing`’s `log` feature flag ensures that a log record is emitted every time a tracing event happens, allowing `log`’s loggers to pick them up.
+* This enables us to get `actix-web`'s log records as well.
+
+### Removing Unused Dependencies
+* `cargo install cargo-udeps` scans your Cargo.toml file and checks if all the crates listed under `[dependencies]` have actually been used in the project.
+* It needs to run with the nightly compiler: `cargo +nightly udeps`.
+
+### Logs For Integration Tests
+* As a rule of thumb, everything we use in our application should be reflected in our integration tests.
+* Structured logging, in particular, can significantly speed up our debugging when an integration test fails:
+  * we might not have to attach a debugger, more often than not the logs can tell us where something went wrong.
+  * It is also a good benchmark: if you cannot debug it from logs, imagine how difficult would it be to debug in production.
+* We will initialize the `subscriber` in the same way for our tests, but `init_subscriber` should only be called once. Calling it in `spawn_app` would call it for each test, so we will use the `once_cell` crate dependency to rectify it.
+* To make sure tests don't print the logs each time to the console, we need something similar to `cargo test`'s `--nocapture` option that opts us in to look at `println` statements.
+  * We will use `Sink`.
+
+### Cleaning Up Instrumentation Code - tracing::instrument
+* Logging has added some noise to our `subscribe` function.
+* Extracting each sub-task in its own function is a common way to structure routines to improve readability and make it easier to write tests; therefore we will often want to attach a span to a function declaration.
+* `tracing` caters for this specific use-case with its `tracing::instrument` procedural macro.
+* `#[tracing::instrument]` creates a span at the beginning of the function invocation and automatically attaches all arguments passed to the function to the context of the span - in our case, `form` and `connection_pool`.
+* Often function arguments won’t be displayable on log records (e.g. `connection_pool`) or we’d like to specify more explicitly what should/how they should be captured (e.g. naming each field of `form`) - we can explicitly tell tracing to ignore them using the `skip` directive.
+* `name` can be used to specify the message associated to the function span - if omitted, it defaults to the function name.
+* We can also enrich the span’s context using the `fields` directive.
+  * It uses the same syntax as the `info_span!` macro.
+* The result is quite nice: all instrumentation concerns are visually separated by execution concerns - the first are dealt with in a procedural macro that “decorates” the function declaration, while the function body focuses on the actual business logic.
+
+### Protect Your Secrets - `secrecy`
+* `#[tracing::instrument]` automatically attaches all arguments passed to the function to the context of the span - you have to **opt-out** of logging function inputs (via `skip`) rather than **opt-in**.
+* Opt-out is a dangerous default since each time we add a new function parameter, we need to make sure that we update the `skip`.
+* We can use a wrapper type `secrecy::Secret` to explicitly mark which fields are considered to be sensitive.
+* We can wrap our database password in a secret so it outputs `Secret([REDACTED String])` to mask its `Debug` implementation `println!("{:?}, db_password)`.
+* `Secret` does not implement `Display` so we need to manually expose the secret with the `expose_secret()` method.
+
+### Request Id
+* We need to ensure that all logs for a particular request, in particular the record with the returned status code, are enriched with a `request_id` property.
+* To avoid touching `actix_web::Logger`, we can add another middleware, `RequestIdMiddleware` that:
+  1. generates a unique request identifier
+  2. creates a new span with the request identifier attached as context
+  3. wraps the rest of the middleware chain in the newly created span
+* Since our `subscribe` function generates a new `request_id` for the span, we have to remove it so we don't get 2 `request_id`s in our log messages for the same request.
+
+### Leveraging The `tracing` Ecosystem
+* `tracing` is a foundational crate in the Rust ecosystem.
+* While `log` is the minimum common denominator, `tracing` is the modern backbone of the whole diagnostics and instrumentation ecosystem.
+* It can do more things like:
+  1. `tracing-actix-web` is OpenTelemetry-compatible. If you plug-in `tracing-opentelemetry` you can ship spans to an OpenTelemetry-compatible service (e.g. Jaeger or Honeycomb.io) for further analysis.
+  2. `tracing-error` enriches our error types with a `SpanTrace` to ease troubleshooting.

@@ -19,9 +19,14 @@ DB_NAME="${POSTGRES_DB:=newsletter}"
 DB_PORT="${POSTGRES_PORT:=5432}"
 DB_HOST="${POSTGRES_HOST:=localhost}"
 
+SKIP_DOCKER=0
+if [ "$(docker ps | grep postgres)" ]; then
+  SKIP_DOCKER=1
+  >&2 echo "Postgres container already running. Setting SKIP_DOCKER to 1"
+fi
+
 # Allow to skip Docker if a dockerized Postgres database is already running
-if [[ -z "${SKIP_DOCKER}" ]]
-then
+if [[ "${SKIP_DOCKER}" -ne 1 ]]; then
     # Launch postgres using Docker
     docker run \
     -e POSTGRES_USER=${DB_USER} \

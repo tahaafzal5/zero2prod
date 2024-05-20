@@ -2,6 +2,7 @@ use sqlx::{Connection, Executor, PgConnection, PgPool};
 use std::net::TcpListener;
 use uuid::Uuid;
 use zero2prod::configuration::{get_configuration, DatabaseSettings};
+use zero2prod::routes::health_check_route;
 use zero2prod::startup::run;
 
 pub struct TestApp {
@@ -16,7 +17,7 @@ async fn health_check_works() {
     let app = spawn_app().await;
     let client = reqwest::Client::new();
 
-    let request = format!("{}/health_check", app.address);
+    let request = format!("{}{}", app.address, health_check_route());
     let response = client
         .get(request)
         .send()

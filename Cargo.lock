@@ -255,12 +255,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "arraydeque"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7d902e3d592a523def97af8f317b08ce16b7ab854c1985a0c671e6f15cebc236"
-
-[[package]]
 name = "async-trait"
 version = "0.1.80"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2665,16 +2659,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "yaml-rust2"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5572fa34ea84ba82e290742119ebaa6a5f2ddff84841e9815d4e99c9b271cdb0"
-dependencies = [
- "arraydeque",
- "linked-hash-map",
-]
-
-[[package]]
 name = "zero2prod"
 version = "0.1.0"
 dependencies = [
@@ -2686,7 +2670,6 @@ dependencies = [
  "sqlx",
  "tokio",
  "uuid",
- "yaml-rust2",
 ]
 
 [[package]]

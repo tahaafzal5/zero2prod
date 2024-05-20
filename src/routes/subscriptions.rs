@@ -32,3 +32,7 @@ pub async fn subscribe(
         }
     }
 }
+
+pub fn subscriptions_route() -> String {
+    String::from("/subscriptions")
+}

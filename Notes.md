@@ -225,7 +225,7 @@ The Language Server Protocol makes it easy to leverage `rust-analyzer` in many d
 * We will use `actix-web`
 
 ## Our First Endpoint: A Basic Health Check
-* We would need to add `actix-web` and `tokio` to our list od dependencies with `cargo add <package-name>@<version>`
+* We would need to add `actix-web` and `tokio` to our list of dependencies with `cargo add <package-name>@<version>`
 
 ### Anatomy Of An actix-web Application
 

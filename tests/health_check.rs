@@ -1,9 +1,8 @@
 use once_cell::sync::Lazy;
-use secrecy::ExposeSecret;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use std::net::TcpListener;
 use uuid::Uuid;
-use zero2prod::configuration::{get_configuration, Settings};
+use zero2prod::configuration::{get_configuration, DatabaseSettings};
 use zero2prod::routes::{health_check_route, subscriptions_route};
 use zero2prod::startup::run;
 use zero2prod::telemetry::{get_subscriber, init_subscriber};
@@ -116,7 +115,9 @@ async fn spawn_app() -> TestApp {
     let port = listener.local_addr().unwrap().port();
     let address = format!("http://{}:{}", host, port);
 
-    let connection_pool = configure_database(&mut configuration).await;
+    configuration.database.database_name = Uuid::new_v4().to_string();
+
+    let connection_pool = configure_database(&configuration.database).await;
     let server = run(listener, connection_pool.clone()).expect("Failed to bind address");
 
     // Launch our application in the background
@@ -132,32 +133,21 @@ async fn spawn_app() -> TestApp {
 Create a new database with a new/random name for each test for test isolation.
 We then also need to run migrations on this new database.
 */
-pub async fn configure_database(config: &mut Settings) -> PgPool {
-    config.database.database_name = format!(
-        "{}-{}",
-        config.database.database_name,
-        Uuid::new_v4().to_string()
-    );
+pub async fn configure_database(config: &DatabaseSettings) -> PgPool {
+    let mut connection = PgConnection::connect_with(&config.without_db())
+        .await
+        .expect("Failed to connect to Postgres");
 
-    let mut connection = PgConnection::connect(
-        &config
-            .database
-            .connection_string_without_db()
-            .expose_secret(),
-    )
-    .await
-    .expect("Failed to connect to Postgres");
-
-    let query = format!(r#"CREATE DATABASE "{}";"#, config.database.database_name);
+    let query = format!(r#"CREATE DATABASE "{}";"#, config.database_name);
 
     connection
         .execute(query.as_str())
         .await
         .expect("Failed to create database");
 
-    let connection_pool = PgPool::connect(&config.database.connection_string().expose_secret())
+    let connection_pool = PgPool::connect_with(config.with_db())
         .await
-        .expect("Failed to connect to Postgres");
+        .expect("Failed to connect to Postgres.");
 
     sqlx::migrate!("./migrations")
         .run(&connection_pool)

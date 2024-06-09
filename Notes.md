@@ -103,6 +103,27 @@
     - [Protect Your Secrets - `secrecy`](#protect-your-secrets---secrecy)
     - [Request Id](#request-id)
     - [Leveraging The `tracing` Ecosystem](#leveraging-the-tracing-ecosystem)
+- [Ch 5 - Going Live](#ch-5---going-live)
+  - [We Must Talk About Deployments](#we-must-talk-about-deployments)
+  - [Choosing Our Tools](#choosing-our-tools)
+    - [Virtualization: Docker](#virtualization-docker)
+    - [Hosting: DigitalOcean](#hosting-digitalocean)
+  - [A Dockerfile For Our Application](#a-dockerfile-for-our-application)
+    - [Dockerfiles](#dockerfiles)
+    - [Build Context](#build-context)
+    - [Sqlx Offline Mode](#sqlx-offline-mode)
+    - [Running An Image](#running-an-image)
+    - [Networking](#networking)
+    - [Hierarchical Configuration](#hierarchical-configuration)
+    - [Optimizing Our Docker Image](#optimizing-our-docker-image)
+      - [Docker Image Size](#docker-image-size)
+      - [Caching For Rust Docker Builds](#caching-for-rust-docker-builds)
+  - [Deploy To DigitalOcean](#deploy-to-digitalocean)
+    - [Setup](#setup)
+    - [App Specification](#app-specification)
+    - [How To Inject Secrets Using Environment Variables](#how-to-inject-secrets-using-environment-variables)
+    - [Connecting To Digital Ocean’s Postgres Instance](#connecting-to-digital-oceans-postgres-instance)
+    - [Environment Variables In The App Spec](#environment-variables-in-the-app-spec)
 
 # Preface
 
@@ -782,3 +803,152 @@ down all tasks spawned on it are dropped.
 * It can do more things like:
   1. `tracing-actix-web` is OpenTelemetry-compatible. If you plug-in `tracing-opentelemetry` you can ship spans to an OpenTelemetry-compatible service (e.g. Jaeger or Honeycomb.io) for further analysis.
   2. `tracing-error` enriches our error types with a `SpanTrace` to ease troubleshooting.
+
+# Ch 5 - Going Live
+* We will package our Rust application as a Docker container to deploy it on DigitalOcean.
+
+## We Must Talk About Deployments
+* It is difficult to talk about database schema migrations, domain validation and API evolution without taking into account your deployment process.
+
+## Choosing Our Tools
+
+### Virtualization: Docker
+* The fundamental idea behind virtualization technology: what if, instead of shipping code to production, you could ship a self-contained environment that included your application?
+* It is not enough to copy the source code to our production servers. Our software is likely to make assumptions on the capabilities exposed by the underlying operating system (e.g. a native Windows application will not run on Linux), on the availability of other software on the same machine (e.g. a certain version of the Python interpreter) or on its configuration (e.g. do I have root permissions?).
+* Even if we started with two identical environments we would, over time, run into troubles as versions drift and subtle inconsistencies come up.
+* The easiest way to ensure that our software runs correctly is to tightly control the environment it is being executed into.
+
+### Hosting: DigitalOcean
+* The options are AWS, Google Cloud, Azure, Digital Ocean, Clever Cloud, Heroku, Qovery...
+* For the intersection of a good developer experience and minimal unnecessary complexity, we will use Digital Ocean.
+
+## A Dockerfile For Our Application
+* Our first task is to write a Docker file to build and execute our application as a Docker container.
+ 
+### Dockerfiles
+* A Dockerfile is a recipe for your application environment.
+* They are organized in layers: you start from a base image (usually an OS enriched with a programming language toolchain) and execute a series of commands (`COPY`, `RUN`, etc.), one after the other, to build the environment you need.
+* We added our recipe in the `Dockerfile` that we can build using `docker build --tag zero2prod --file Dockerfile .`
+* We added `--tag` to our build command so that we can refer to that image in other Docker commands: like to run it `docker run zero2prod`.
+
+### Build Context
+* What does the `.` at the end of the last command stand for?
+* `docker build` generates an image starting from a recipe (the Dockerfile) and a *build context*.
+* The only point of contact between the image and your local machine are commands like `COPY` and `ADD`: the build context determines what files on your host machine are visible inside the Docker container to `COPY` etc.
+* Using `.` tells Docker to use the current directory as the build context for this image; `COPY . app` will therefore copy all files from the current directory (including the source code) into the app directory of the Docker image.
+* Using `.` as build context implies, for example, that Docker will not allow `COPY` to see files from the parent directory or from arbitrary paths on your machine into the image.
+* We can use a different path or even a URL as build context depending on our needs.
+
+### Sqlx Offline Mode
+* The above build command won't work:
+  * `sqlx` calls into our database at compile-time to ensure that all queries can be successfully executed considering the schemas of our tables.
+  * When running `cargo build` inside our Docker image, though, `sqlx` fails to establish a connection with the database that the `DATABASE_URL` environment variable in the `.env` file points to.
+* We could allow our image to talk to the database running on our local machine at build time using the `--network` flag,  but because how Docker networking is implemented on different OSs it would compromise how reproducible our builds are.
+* A better option is to use `sqlx` **offline mode**.
+* `sqlx prepare` performs the same work that is usually done when `cargo build` is invoked but it saves the outcome of those queries into a directory (`.sqlx`) which can later be detected by `sqlx` itself and used to skip the queries altogether and perform an offline build.
+* We check the query data in `.sqlx` into version control.
+* We can then set the `SQLX_OFFLINE` environment variable to `true` in our Dockerfile to force `sqlx` to look at the saved metadata instead of trying to query a live database.
+* To ensure that the queries in `.sqlx` do not go out of sync (e.g. when the schema of our database changes or when we add new queries), we can use the `--check` flag in our CI pipeline to ensure that it stays up-to-date.
+
+### Running An Image
+* `docker run zero2prod` triggers the execution of the command we specified in our `ENTRYPOINT` statement.
+* Running our image will fail:
+  * ```
+      thread 'main' panicked at
+        'Failed to connect to Postgres:
+        Io(Os {
+          code: 99,
+          kind: AddrNotAvailable,
+          message: "Cannot assign requested address"
+      })'
+    ```
+* We can relax our requirements by using `connect_lazy` instead of `connect` so it will only try to establish a connection when the pool is used for the first time.
+* With this change, we can run our image but making a request to our health check endpoint, for example, fails: `curl: (7) Failed to connect to 127.0.0.1 port 8000 after 1 ms: Couldn't connect to server`.
+
+### Networking
+* The above error is because, by default, Docker images don't expose their ports to the underlying host machine. We need to do it explicitly with the `-p` flag.
+* `docker run -p 8000:8000 zero2prod`
+* We not get this error: `curl: (56) Recv failure: Connection reset by peer`
+* Looking at our `main.rs`, we are using `127.0.0.1` as our host in address - we are instructing our application to only accept connections coming from the same machine.
+* A GET request to `/health_check` from the host machine, which is not seen as local by our Docker image, therefore triggering the error.
+* We need to use `0.0.0.0` as host to instruct our application to accept connections from any network interface, not just the local one.
+* But using `0.0.0.0` significantly increases the “audience” of our application, with some security implications.
+* The best way is to make the host portion of our address configurable - keep using `127.0.0.1` for our local development and set it to `0.0.0.0` in our Docker images.
+
+### Hierarchical Configuration
+* We add `ApplicationSettings` struct to our `Settings` struct and make adjustments to the configuration.yaml to read the `host` from.
+* To use a different value for different environments, we need to make our configuration hierarchical.
+* We will make adjustments to our `get_configuration` function to have a more refined approach. We will have:
+  1. A base configuration file, for values that are shared across our local and production environment (e.g. database name);
+  2. A collection of environment-specific configuration files, specifying values for fields that require customization on a per-environment basis (e.g. `host`)
+  3. An environment variable, `APP_ENVIRONMENT`, to determine the running environment (e.g. `production` or `local`).
+* We will store all these configurations in a top-level configurations directory.
+
+**⛔️ Docker container seems to be running on 0.0.0.0:8000 and I can send requests from inside the container, but get an error if I send the same request from the host machine. I am using `-p 8000:8000` in my `run` command**
+
+**⛔️ Using `docker exec -it <container_id> /bin/sh` to get into the container and then make the requests there for now.**
+
+### Optimizing Our Docker Image
+* There are two optimisations we can make to our Dockerfile to make our life easier going forward:
+  1. smaller image size for faster usage
+  2. Docker layer caching for faster builds
+
+#### Docker Image Size
+* We can reduce the size of the Docker build context by excluding files that are not needed to build our image.
+* These files will be added to `.dockerignore` and are not sent by Docker as part of the build context to the image, which means they will not be in scope for `COPY` instructions.
+* The next optimization is due to one of Rust's strengths.
+  * Rust's binaries are statically linked - we don't need to keep the source code or intermediate compilation artifacts around to run the binary since it is self-contained.
+  * So, we can use Docker's multi-stage builds feature to split our build into 2 stages:
+    1. a `builder` stage to generate a compiled binary
+    2. a `runtime` stage to run the binary
+* The `builder` stage doesn't contribute to the size - it is an intermediate step and is discraded at the end of the build. The only piece of the `builder` stage that is found in the final artifact is what we explicitly copy over.
+* `runtime` is our final image.
+* This brings our image from 5.5 GB to 1.75 GB, but we can go even smaller by using a smaller image for rust with `-slim`: down to 1.09 GB
+* We can go even smaller by shaving off the whole Rust toolchain and machinery (`rustc`, `cargo`, etc.) since none of that is needed to run our binary.
+* We can use the bare operating system as the base image (`debian:bookwork-slim`) for our runtime stage. Down to 119 MB!
+
+#### Caching For Rust Docker Builds
+* Each `RUN`, `COPY` and `ADD` instruction in a Dockerfile creates a layer: a diff between the previous state (the layer above) and the current state after having executed the specified command.
+* Layers are cached: if the starting point of an operation has not changed (e.g. the base image) and the command itself has not changed (e.g. the checksum of the files copied by `COPY`) Docker does not perform any computation and just retrieves a copy of the result from the local cache.
+* Docker layer caching is fast and can be leveraged to massively speed up Docker builds.
+  * The trick is optimising the order of operations in your Dockerfile: anything that refers to files that are changing often (e.g. source code) should appear as late as possible, therefore maximizing the likelihood of the previous step being unchanged and allowing Docker to retrieve the result from the cache.
+  * The expensive step is usually compilation.
+  * Most programming languages follow the same playbook: you `COPY` a lock-file of some kind first, build your dependencies, `COPY` over the rest of your source code and then build your project.
+  * This guarantees that most of the work is cached as long as your dependency tree does not change between one build and the next.
+* `cargo`, unfortunately, does not provide a mechanism to build your project dependencies starting from its `Cargo.lock` file, but we can rely on `cargo-chef` to expand cargo’s default capability.
+* We are using three stages: the first computes the recipe file, the second caches our dependencies and then builds our binary, the third is our runtime environment.
+  * As long as our dependencies do not change the `recipe.json` file will stay the same, therefore the outcome of `cargo chef cook --release --recipe-path recipe.json` will be cached, massively speeding up our builds.
+* We are taking advantage of how Docker layer caching interacts with multi-stage builds: the `COPY . .` statement in the planner stage will invalidate the cache for the planner container, but it will not invalidate the cache for the builder container as long as the checksum of the `recipe.json` returned by `cargo chef prepare` does not change.
+* You can think of each stage as its own Docker image with its own caching - they only interact with each other when using the `COPY --from` statement.
+
+## Deploy To DigitalOcean
+
+### Setup
+* We setup our accoung and install `dotcl`.
+
+### App Specification
+* Digital Ocean’s App Platform uses a declarative configuration file called App Spec to let us specify what our application deployment should look like.
+* We will put the App Spec in the repo's root `spec.yaml` and create the app for the first time with `doctl apps create --spec spec.yaml`.
+* The `/POST` endpoint will still fail since we don't have a live database backing up our application in our production environment.
+* We will add one in the `spec.yaml` file and update our app: `doctl apps update <APP-ID> --spec=spec.yaml`
+  
+### How To Inject Secrets Using Environment Variables
+* The connection string will contain values that we do not want to commit to version control - e.g. the username and the password of our database root user.
+* The best option is to use environment variables as a way to inject secrets at runtime into the application environment.
+* DigitalOcean’s apps, can refer to the `DATABASE_URL` environment variable to get the database connection string at runtime.
+* We need to upgrade our `get_configuration` function to fulfill our new requirements.
+* The changes to add in settings from environment variables (with a prefix of APP and `__` as separator) allow us to customize any value in our `Settings` struct using environment variables, overriding what is specified in our configuration files.
+* This makes it possible to inject values that are too dynamic, not known prior, or too sensitive to be stored in version control.
+* We can also change the behavior of our application faster without a full re-build if we want to tune the database port, for example.
+* But, environment variables are strings for the `config` crate and it will fail to pick up integers if using the standard deserialization routine from `serde`. So we need to specify a custom deserialization function via a new dependency `serde-aux`.
+* We then need to add ` #[serde(deserialize_with = "deserialize_number_from_string")]` to the `u16`s in `ApplicationSettings` and `DatabaseSettings`.
+
+### Connecting To Digital Ocean’s Postgres Instance
+* Looking at the connection string of our database on DigitalOcean's dashboard, we see that it isn't using SSL mode.
+* While not relevant for local development, we should have transport-level encryption for our client/database communication in production.
+* We will add a `require_ssl` field in `DatabaseSettings` and update our configuration files to default it to `false` for local and to `true` for production.
+
+### Environment Variables In The App Spec
+* We need to amend our `spec.yaml` manifest to inject the environment variables we need.
+* The scope is set to `RUN_TIME` to distinguish between environment variables needed during our Docker build process and those needed when the Docker image is launched.
+* We are populating the values of the environment variables by interpolating what is exposed by the Digital Ocean’s platform (e.g. `${newsletter.PORT}`) 

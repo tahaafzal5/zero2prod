@@ -125,6 +125,32 @@
     - [Connecting To Digital Ocean’s Postgres Instance](#connecting-to-digital-oceans-postgres-instance)
     - [Environment Variables In The App Spec](#environment-variables-in-the-app-spec)
     - [One Last Push](#one-last-push)
+- [Ch 6 - Reject Invalid Subscribers #1](#ch-6---reject-invalid-subscribers-1)
+  - [Requirements](#requirements)
+    - [Domain Constraints](#domain-constraints)
+    - [Security Constraints](#security-constraints)
+  - [First Implementation](#first-implementation)
+  - [Validation Is A Leaky Cauldron](#validation-is-a-leaky-cauldron)
+  - [Type-Driven Development](#type-driven-development)
+  - [Ownership Meets Invariants](#ownership-meets-invariants)
+    - [AsRef](#asref)
+  - [Error As Values - Result](#error-as-values---result)
+    - [Converting `parse` To Return `Result`](#converting-parse-to-return-result)
+  - [Insightful Assertion Errors: `claims`](#insightful-assertion-errors-claims)
+  - [Unit Tests](#unit-tests)
+  - [Handling A `Result`](#handling-a-result)
+    - [The `?` Operator](#the--operator)
+    - [400 Bad Request](#400-bad-request)
+  - [The Email Format](#the-email-format)
+  - [The `SubscriberEmail` Type](#the-subscriberemail-type)
+    - [Breaking The Domain Sub-Module](#breaking-the-domain-sub-module)
+    - [Skeleton Of A New Type](#skeleton-of-a-new-type)
+  - [Property-based Testing](#property-based-testing)
+    - [How To Generate Random Test Data With `fake`](#how-to-generate-random-test-data-with-fake)
+    - [Getting Started with `quickcheck`](#getting-started-with-quickcheck)
+    - [Implementing the `Arbitrary` Trait](#implementing-the-arbitrary-trait)
+  - [Payload Validation](#payload-validation)
+    - [Refactoring With `TryForm`](#refactoring-with-tryform)
 
 # Preface
 
@@ -961,3 +987,114 @@ down all tasks spawned on it are dropped.
       https://zero2prod-mnodh.ondigitalocean.app/subscriptions \
       --verbose
     ```
+
+# Ch 6 - Reject Invalid Subscribers #1
+* Our input validation for `/POST` is limited: we just ensure that both the `name` and the `email` fields are provided, even if they are empty.
+
+## Requirements
+### Domain Constraints
+* For `name`, we will just require it to be non-empty.
+
+### Security Constraints
+* Forms and user inputs are a primary attack target - if they are not properly sanitized, they might allow an attacker to mess with our database (SQL injection), execute code on our servers, crash our service, etc.
+* We are building an email newsletter, which leads us to focus on:
+  1. denial of service - e.g. trying to take our service down to prevent other people from signing up. A common threat for basically any online service
+  2. data theft -e.g. steal a huge list of email addresses
+  3. phishing -e.g. use our service to send what looks like a legitimate email to a victim to trick them into clicking on some links or perform other actions
+* We will be:
+  * Enforcing a maximum length. We are using `TEXT` as type for our email in Postgres, which is unbounded until disk storage starts to run out. 256 characters should be enough for the greatest majority of our users' name - if not, we will ask them to enter a nickname
+  * Reject names containing troublesome characters. `/()"<>\{}` as they are not common in names. Forbidding them raises the complexity bar for SQL injection and phishing attempts.
+
+## First Implementation
+* We could add a function `is_valid_name()` that we call before we call `insert_subscirber`.
+* That function would trim any whitespace in the name, ensure it isn't too long, isn't non-empty, and doesn't contain forbidden characters, but such an implementation would be a false sense of security.
+
+## Validation Is A Leaky Cauldron
+* Just by looking at the type `FormData`, `insert_subscriber` cannot assume that `form.name` will be non-empty. We would have to shift from a *local* (`insert_subscriber` function) approach to a *global* approach (the entire codebase) to ensure something ensured the name is vaild.
+* Every other function that uses `form.name` would need to do the same validation (and it could be missed during refactoring etc) and such implementations could result in input checks in multiple places -- also bad. This approach does not scale.
+* We need is a parsing function - a routine that accepts unstructured input and, if a set of conditions holds, returns us a more structured output, an output that structurally guarantees that the invariants we care about hold from that point onwards. We can do this using **types**!
+
+## Type-Driven Development
+* We will add a new type `SubscriberName` (a tuple struct with a single unnamed field of type `String`) in a new module `Domain` to achieve what we want.
+* Since the function `parse` is the only way to construct a `SubscriberName`, we have ensured that `SubsriberName` will never violate our constraints.
+* Type-driven development is a powerful approach to encode the constraints of a domain we are trying to model inside the type system, leaning on the compiler to make sure they are enforced.
+
+## Ownership Meets Invariants
+* Since `SubsriberName` itself doesn't expose the internal `String`, and we don't want to, we will add a `inner_ref` method to give a shared reference to the inner string.
+
+### AsRef
+* While our `inner_ref` method gets the job done, Rust’s standard library exposes a trait that is designed exactly for this type of usage - `AsRef`.
+* So, we will replace `inner_ref` with `as_ref`.
+
+## Error As Values - Result
+* Rust’s panics are not equivalent to exceptions in languages such as Python, C# or Java.
+* Although Rust provides a few utilities to catch (some) panics, it is **not** the recommended approach.
+* `Result` is used as the return type for fallible operations: if the operation succeeds, `Ok(T)` is returned; if it fails, you get `Err(E)`.
+  
+### Converting `parse` To Return `Result`
+* We will now return a `Result<SubscriberName, String>` instead of just `SubscriberName`.
+
+## Insightful Assertion Errors: `claims`
+* We will be using the `claims` crate to get more informative error messages when a test fails when using assertions and then we can use `claims::assert_ok!()`.
+
+## Unit Tests
+* We will add some tests to the `domain` module.
+* `claims` needs our type to implement the `Debug` trait to provide those nice error messages. So we will add a `#[derive(Debug)]` attribute on top of `SubscriberName`
+
+## Handling A `Result`
+* Instead of panicing when an invalid name is passed in, we want to return a "400 Bad Request".
+
+### The `?` Operator
+* `?` is syntactic sugar to reduce the amount of visual noise when you are working with fallible functions and you want to “bubble up” failures.
+
+### 400 Bad Request
+* We will return a 400 Bad Request when from `subscribe` if a bad name is used.
+
+## The Email Format
+* We will use the `validator` crate to validate emails.
+
+## The `SubscriberEmail` Type
+* We will follow the same strategy we used for `name` validation - encode our invariant (“this string represents a valid email”) in a new `SubscriberEmail` type.
+
+### Breaking The Domain Sub-Module
+* We will break down the `domain` module into `new_subscriber`, `subscriber_email`, and `subcriber_name` for better organization.
+  
+### Skeleton Of A New Type
+* `SubscriberEmail` will also be a a tuple struct with a single unnamed field of type `String`.
+* We will also implement `AsRef` and let the `validator` do all the validation for the email to be accurate.
+
+## Property-based Testing
+* We could use another approach to test our parsing logic: instead of verifying that a certain set of inputs is correctly parsed, we could build a random generator that produces valid values and check that our parser does not reject them.
+* This approach is called property-based testing.
+* Property-based testing significantly increases the range of inputs that we are validating, and therefore our confidence in the correctness of our code, but it does not prove that our parser is correct.
+
+### How To Generate Random Test Data With `fake`
+* `fake` provides generation logic for both primitive data types (integers, floats, strings) and higher-level objects (IP addresses, country codes, email, etc).
+* But we would have to run our test suite mulitple times to make sure we catch every edge case, or we could have a `for` loop to test.
+
+### Getting Started with `quickcheck`
+* There are test crates available for property-based testing, 2 of them are: `quickcheck` and `proptest`, but we will use `quickcheck`.
+* `quickcheck` calls our test function in a loop with a configurable number of iterations (100 by default): on every iteration, it generates a new test case and checks the value that function returned.
+* If our function fails, it tries to shrink the generated input to the smallest possible failing example to help us debug what went wrong.
+* Unfortunately, if we ask for a `String` type as input we are going to get all sorts of garbage which will fail validation. How to get around this?
+
+### Implementing the `Arbitrary` Trait
+* How does `quickcheck` know what to generate to test?
+* Everything is built on top of `quickcheck`'s `Arbitrary` trait that has 2 methods:
+  1. `arbitrary`: given a source of randomness (`g`) it returns an instance of the type
+  2. `shrink`: returns a sequence of progressively "smaller" instances of the type to help `quickcheck` find the smallest possible failure case.
+
+* We need to create our own type, `ValidEmailFixture`, and implement `Arbitrary` for it.
+* Looking at `Arbitrary`’s trait definition, `shrink` is optional: there is a default implementation (using `empty_shrinker`) which results in `quickcheck` outputting the first failure encountered, without trying to make it any smaller or nicer. So, we only need to provide an implementation of `Arbitrary::arbitrary` for our `ValidEmailFixture`.
+* In `Arbitrary::arbitrary`, we get `g` as an input, an argument of type `G`.
+* `G` is constraint by a trait bound, `G: quickcheck::Gen` therefore it must implement the `Gen` trait in `quickcheck`.
+* And anything that implements `Gen` must also implement `RngCore` trait from the `rand-core` crate.
+* We can add a `dbg!(&valid_email.0)` and run tests like `cargo t valid_emails -- --nocapture` to see all the valid emails generated.
+
+## Payload Validation
+* We can now make the changes needed in our application to use `SubsriberEmail` and all integration tests would pass.
+
+### Refactoring With `TryForm`
+* We can extract the logic to parse `name` and `email` for `NewSubscriber` into a function to get a better separation of concerns.
+* We will implement `TryForm` on `NewSubscriber` to explicitly show our intent that we are convert a `FormData` into `NewSubscriber`.
+* When we implement `try_form`, we automatically get the corresponding `try_into` for free that we can call.

@@ -4,7 +4,7 @@ use std::net::TcpListener;
 use uuid::Uuid;
 use zero2prod::configuration::{get_configuration, DatabaseSettings};
 use zero2prod::routes::{health_check_route, subscriptions_route};
-use zero2prod::startup::run;
+use zero2prod::startup::{header, run};
 use zero2prod::telemetry::{get_subscriber, init_subscriber};
 
 pub struct TestApp {
@@ -35,11 +35,12 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
     let app = spawn_app().await;
     let client = reqwest::Client::new();
 
+    let post_request_header = header();
     let request = format!("{}{}", app.address, subscriptions_route());
     let body = format!("name=Taha%20Afzal&email=tahaafzal5%40hotmail.com");
     let response = client
         .post(request)
-        .header("Content-Type", "application/x-www-form-urlencoded")
+        .header(&post_request_header.name, &post_request_header.value)
         .body(body)
         .send()
         .await
@@ -69,10 +70,11 @@ async fn subscribe_returns_a_400_when_data_is_missing() {
         ("", "missing both name and email"),
     ];
 
+    let post_request_header = header();
     for (invalid_body, error_message) in test_cases {
         let response = client
             .post(&request)
-            .header("Content-Type", "application/x-www-form-urlencoded")
+            .header(&post_request_header.name, &post_request_header.value)
             .body(invalid_body)
             .send()
             .await

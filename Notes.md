@@ -151,6 +151,11 @@
     - [Implementing the `Arbitrary` Trait](#implementing-the-arbitrary-trait)
   - [Payload Validation](#payload-validation)
     - [Refactoring With `TryForm`](#refactoring-with-tryform)
+- [Ch 7 - Reject Invalid Subscribers #2](#ch-7---reject-invalid-subscribers-2)
+  - [Confirmation Emails](#confirmation-emails)
+    - [Subscriber Consent](#subscriber-consent)
+    - [The Confirmation User Journey](#the-confirmation-user-journey)
+    - [The Implementation Strategy](#the-implementation-strategy)
 
 # Preface
 
@@ -1098,3 +1103,36 @@ down all tasks spawned on it are dropped.
 * We can extract the logic to parse `name` and `email` for `NewSubscriber` into a function to get a better separation of concerns.
 * We will implement `TryForm` on `NewSubscriber` to explicitly show our intent that we are convert a `FormData` into `NewSubscriber`.
 * When we implement `try_form`, we automatically get the corresponding `try_into` for free that we can call.
+
+# Ch 7 - Reject Invalid Subscribers #2
+
+## Confirmation Emails
+* Now that our remails are syntactically correct, we need to make sure they exist and reachable.
+
+### Subscriber Consent
+* We will confirm emails by sending confirmation emails and this will also tell us about the subsriber's explicit consent before we send our first newsletter.
+
+### The Confirmation User Journey
+* The user will receive an email with a confirmation link.
+* Once they click on it, we will send a 200 OK to the browser.
+* From that point onwards, they will receive all newsletter issues in their inbox.
+
+* Every time a user wants to subscribe, they fire a `POST /subscriptions` request
+* Our request handler will:
+  1. add their details to our database in the `subscriptions` table, with `status` equal to `pending_confirmation`
+  2. generate a unique `subscription_token`
+  3. store `subscription_token` in our database against their `id` in a `subscription_tokens` table;
+  4. send an email to the new subscriber containing a link structured as `https://<api-domain>/subscriptions/confirm?token=<subscription_token>`
+  5. return a 200 OK.
+
+* Once they click on the link, a browser tab will open to send a `GET /subscriptions/confirm` endpoint request.
+* Our request handler will:
+  1. retrieve `subscription_token` from the query parameters
+  2. retrieve the subscriber `id` associated with `subscription_token` from the `subscription_tokens` table
+  3. update the subscriber `status` from `pending_confirmation` to `active` in the `subscriptions` table
+  4. return a 200 OK.
+
+* There are a few other possible designs (e.g. use a JWT instead of a unique token) and we have a few corner cases to handle (e.g. what happens if they click on the link twice or if they try to subscribe twice?).
+
+### The Implementation Strategy
+* 

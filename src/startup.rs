@@ -20,3 +20,15 @@ pub fn run(listener: TcpListener, connection_pool: PgPool) -> Result<Server, std
 
     Ok(server)
 }
+
+pub struct PostRequestHeader {
+    pub name: String,
+    pub value: String,
+}
+
+pub fn header() -> PostRequestHeader {
+    PostRequestHeader {
+        name: String::from("Content-Type"),
+        value: String::from("application/x-www-form-urlencoded"),
+    }
+}

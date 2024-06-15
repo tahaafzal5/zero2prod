@@ -149,7 +149,8 @@ pub async fn configure_database(config: &DatabaseSettings) -> PgPool {
         .await
         .expect("Failed to connect to Postgres.");
 
-    sqlx::migrate!("./migrations")
+    // Defaults to "./migrations"
+    sqlx::migrate!()
         .run(&connection_pool)
         .await
         .expect("Failed to migrate database");

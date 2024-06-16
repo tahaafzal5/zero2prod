@@ -7,6 +7,30 @@ pub enum Environment {
     Production,
 }
 
+#[derive(serde::Deserialize)]
+pub struct Settings {
+    pub database: DatabaseSettings,
+    pub application: ApplicationSettings,
+}
+
+#[derive(serde::Deserialize)]
+pub struct ApplicationSettings {
+    pub host: String,
+    #[serde(deserialize_with = "deserialize_number_from_string")]
+    pub port: u16,
+}
+
+#[derive(serde::Deserialize)]
+pub struct DatabaseSettings {
+    pub username: String,
+    pub password: Secret<String>,
+    pub host: String,
+    #[serde(deserialize_with = "deserialize_number_from_string")]
+    pub port: u16,
+    pub database_name: String,
+    pub require_ssl: bool,
+}
+
 impl Environment {
     pub fn as_str(&self) -> &'static str {
         match self {
@@ -30,30 +54,6 @@ impl TryFrom<String> for Environment {
             )),
         }
     }
-}
-
-#[derive(serde::Deserialize)]
-pub struct Settings {
-    pub database: DatabaseSettings,
-    pub application: ApplicationSettings,
-}
-
-#[derive(serde::Deserialize)]
-pub struct DatabaseSettings {
-    pub username: String,
-    pub password: Secret<String>,
-    pub host: String,
-    #[serde(deserialize_with = "deserialize_number_from_string")]
-    pub port: u16,
-    pub database_name: String,
-    pub require_ssl: bool,
-}
-
-#[derive(serde::Deserialize)]
-pub struct ApplicationSettings {
-    pub host: String,
-    #[serde(deserialize_with = "deserialize_number_from_string")]
-    pub port: u16,
 }
 
 impl DatabaseSettings {

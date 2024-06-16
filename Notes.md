@@ -156,6 +156,15 @@
     - [Subscriber Consent](#subscriber-consent)
     - [The Confirmation User Journey](#the-confirmation-user-journey)
     - [The Implementation Strategy](#the-implementation-strategy)
+  - [`EmailClient`, Our Email Delivery Component](#emailclient-our-email-delivery-component)
+    - [How To Send An Email](#how-to-send-an-email)
+      - [Choosing An Email API](#choosing-an-email-api)
+      - [The Email Client Interface](#the-email-client-interface)
+    - [How To Write A REST Client Using reqwest](#how-to-write-a-rest-client-using-reqwest)
+      - [`reqwest::Client`](#reqwestclient)
+      - [Connection Pooling](#connection-pooling)
+      - [How To Reuse The Same reqwest::Client In `actix-web`](#how-to-reuse-the-same-reqwestclient-in-actix-web)
+      - [Configuring Our EmailClient](#configuring-our-emailclient)
 
 # Preface
 
@@ -1135,4 +1144,59 @@ down all tasks spawned on it are dropped.
 * There are a few other possible designs (e.g. use a JWT instead of a unique token) and we have a few corner cases to handle (e.g. what happens if they click on the link twice or if they try to subscribe twice?).
 
 ### The Implementation Strategy
-* 
+* There is a lot to do here, so we will split the work in three conceptual chunks:
+  1. write a module to send an email
+  2. adapt the logic of our existing `POST /subscriptions` request handler to match the new specification
+  3. write a `GET /subscriptions/confirm` request handler from scratch
+
+## `EmailClient`, Our Email Delivery Component
+
+### How To Send An Email
+* SMTP (Simple Mail Transfer Protocol) does for emails what HTTP does for web pages: it is an application-level protocol that ensures that different implementations of email servers and clients can understand each other and exchange messages.
+* Since building our own private email server would take a long time, we will be writing a REST client for our email API provider.
+
+#### Choosing An Email API
+* We will be using Postmark.
+
+#### The Email Client Interface
+* There are two approaches when it comes to a new piece of functionality:
+  1. bottom-up, starting from the implementation details and working your way up, or
+  2. top-down, by designing the interface first and then figuring out how the implementation is going to work.
+* We will go for the second route.
+
+* Our `EmailClient` will be using the same sender email address to send all the emails.
+* We would need the receiver's email address, the subject line, and the body of the email.
+* We will be sending both HTML and a plain text version of the email content to be safe.
+* Some email clients are not able to render HTML and some users explicitly disable HTML emails.
+* Our `send_email` function would be asynchronous since we will be talking to a remote server.
+
+### How To Write A REST Client Using reqwest 
+* To talk to a REST API, we need an HTTP client and we will choose `reqwest` because:
+  1. It has been extensively battle-tested (~8.5 million downloads)
+  2. It offers a primarily asynchronous interface, with the option to enable a synchronous one via the `blocking` feature flag
+  3. It relies on `tokio` as its asynchronous executor something we are already using due to `actix-web`
+  4. It does not depend on any system library if you choose to use `rustls` to back the TLS implementation (`rustls-tls` feature flag instead of `default-tls`), making it extremely portable
+* We are also using `reqwest` already but we will move it to a runtime dependency from a development dependency.
+
+#### `reqwest::Client`
+* `reqwest::Client` exposes all the methods we need to perform requests against a REST API.
+
+#### Connection Pooling
+* Before executing an HTTP request against an API hosted on a remote server we need to establish a connection.
+* Connecting is an expensive operation, especially if using HTTPS: creating a brand-new connection every time we want to makek a request can impact the performance of our application and might lead to *socket exhaustion* under load.
+* To avoiding re-establishing a connection from scratch, most HTTP clients offer connection pooling: after the first request to a remote server has been completed, they will keep the connection open (for a certain amount of time) and re-use it if we need to send another request to the same server.
+* `reqwest` does the same: every time a `Client` instance is created `reqwest` initialises a connection pool under the hood.
+* To use this connection pool we need to reuse the same `Client` across multiple requests.
+* **Note**: `Client::clone` does not create a new connection pool - we just clone a pointer to the underlying pool.
+
+#### How To Reuse The Same reqwest::Client In `actix-web`
+* To re-use the same HTTP client across multiple requests in `actix-web` we need to store a copy of it in the application context - we will then be able to retrieve a reference to `Client` in our request handlers using an extractor (e.g. `actix_web::web::Data`) similar to how we did it for the `HttpServer`.
+* We have 2 options:
+  1. derive the `Clone` trait for `EmailClient` build an instance of it once and then pass a clone to `app_data` every time we need to build an `App`:
+  2. wrap `EmailClient` in `actix_web::web::Data` (an `Arc` pointer) and pass a pointer to `app_data` every time we need to build an App - like we are doing with `PgPool`.
+* If `EmailClient` were just a wrapper around a `Client` instance, the first option would be preferable - we avoid wrapping the connection pool twice with `Arc`.
+* But, `EmailClient` has two data fields attached (`base_url` and `sender`).
+* The first implementation allocates new memory to hold a copy of that data every time an `App` instance is created, while the second shares it among all `App` instances. That’s why we will be using the second strategy.
+
+#### Configuring Our EmailClient
+* We will add the `base_url` and `sender_email` to our yaml configuration files and ensure we read them to initialize `EmailClient`.

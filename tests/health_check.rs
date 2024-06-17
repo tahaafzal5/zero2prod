@@ -3,7 +3,7 @@ use sqlx::{Connection, Executor, PgConnection, PgPool};
 use std::net::TcpListener;
 use uuid::Uuid;
 use zero2prod::configuration::{get_configuration, DatabaseSettings};
-use zero2prod::email_client::{self, EmailClient};
+use zero2prod::email_client::EmailClient;
 use zero2prod::routes::{health_check_route, subscriptions_route};
 use zero2prod::startup::{header, run};
 use zero2prod::telemetry::{get_subscriber, init_subscriber};
@@ -158,7 +158,11 @@ async fn spawn_app() -> TestApp {
         .email_client
         .sender_email()
         .expect("Invalid sender email address");
-    let email_client = EmailClient::new(configuration.email_client.base_url, sender_email);
+    let email_client = EmailClient::new(
+        configuration.email_client.base_url,
+        sender_email,
+        configuration.email_client.authorization_token,
+    );
 
     let server =
         run(listener, connection_pool.clone(), email_client).expect("Failed to bind address");

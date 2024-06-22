@@ -20,17 +20,13 @@ struct SendEmailRequest<'a> {
 }
 
 impl EmailClient {
-    const TIMEOUT: u64 = 10;
-
     pub fn new(
         base_url: String,
         sender_email: SubscriberEmail,
         authorization_token: Secret<String>,
+        timeout: std::time::Duration,
     ) -> Self {
-        let http_client = Client::builder()
-            .timeout(std::time::Duration::from_secs(Self::TIMEOUT))
-            .build()
-            .unwrap();
+        let http_client = Client::builder().timeout(timeout).build().unwrap();
 
         Self {
             http_client,
@@ -107,7 +103,12 @@ mod tests {
     }
 
     fn email_client(uri: String) -> EmailClient {
-        EmailClient::new(uri, email(), Secret::new(Faker.fake()))
+        EmailClient::new(
+            uri,
+            email(),
+            Secret::new(Faker.fake()),
+            std::time::Duration::from_millis(200),
+        )
     }
 
     fn subject() -> String {
@@ -205,8 +206,7 @@ mod tests {
         let subject = subject();
         let body = body();
 
-        let response = ResponseTemplate::new(200)
-            .set_delay(std::time::Duration::from_secs(EmailClient::TIMEOUT));
+        let response = ResponseTemplate::new(200).set_delay(std::time::Duration::from_secs(200));
 
         Mock::given(any())
             .respond_with(response)

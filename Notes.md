@@ -173,6 +173,9 @@
     - [First Sketch Of `EmailClient::send_email`](#first-sketch-of-emailclientsend_email)
       - [`reqwest::Client::post`](#reqwestclientpost)
       - [JSON body](#json-body)
+    - [Tightening Our Happy Path Test](#tightening-our-happy-path-test)
+        - [Headers, Path And Method](#headers-path-and-method)
+        - [Body](#body)
 
 # Preface
 
@@ -1245,3 +1248,15 @@ down all tasks spawned on it are dropped.
 
 #### JSON body
 * `reqwest`'s JSON feature does the work to set the `request_body` as the JSON body and also sets the `Content-Type` header to `application/json`.
+
+### Tightening Our Happy Path Test
+
+##### Headers, Path And Method
+* We can chain `and` to continue adding expectations for `Mock`, like the `header`, `path`, `method`, etc.
+* We will also replace `any()` with the actual header we want to test for
+
+##### Body
+* It would be enough to check that the body is valid JSON and it contains the set of field names shown in Postmark’s example.
+* Since there isn't an out-of-the-box matcher that suits our needs - we will implement our own: `SendEmailBodyMatcher` where we get the incoming request as input and we need to return a `boolean` value as output whether the mock matched or not.
+* To deserialize the request body as JSON - we will add `serde-json` to the list of our development dependencies.
+* We need to add `#[serde(rename_all = "PascalCase")]` to our `SendEmailRequest` struct so that we can meet the casing requirement.

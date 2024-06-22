@@ -37,8 +37,8 @@ impl EmailClient {
         &self,
         recipient: SubscriberEmail,
         subject: &str,
-        html_content: &str,
-        text_content: &str,
+        html_body: &str,
+        text_body: &str,
     ) -> Result<(), reqwest::Error> {
         let url = format!("{}/email", self.base_url);
 
@@ -46,8 +46,8 @@ impl EmailClient {
             from: self.sender_email.as_ref(),
             to: recipient.as_ref(),
             subject,
-            text_body: text_content,
-            html_body: html_content,
+            text_body,
+            html_body,
         };
 
         let _ = self
@@ -112,10 +112,10 @@ mod tests {
 
         let subscriber_email = SubscriberEmail::parse(SafeEmail().fake()).unwrap();
         let subject: String = Sentence(1..2).fake();
-        let content: String = Paragraph(1..10).fake();
+        let body: String = Paragraph(1..10).fake();
 
         let _ = email_client
-            .send_email(subscriber_email, &subject, &content, &content)
+            .send_email(subscriber_email, &subject, &body, &body)
             .await;
 
         // Assert

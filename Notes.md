@@ -176,6 +176,7 @@
     - [Tightening Our Happy Path Test](#tightening-our-happy-path-test)
         - [Headers, Path And Method](#headers-path-and-method)
         - [Body](#body)
+      - [Refactoring: Avoid Unnecessary Memory Allocations](#refactoring-avoid-unnecessary-memory-allocations)
 
 # Preface
 
@@ -1260,3 +1261,8 @@ down all tasks spawned on it are dropped.
 * Since there isn't an out-of-the-box matcher that suits our needs - we will implement our own: `SendEmailBodyMatcher` where we get the incoming request as input and we need to return a `boolean` value as output whether the mock matched or not.
 * To deserialize the request body as JSON - we will add `serde-json` to the list of our development dependencies.
 * We need to add `#[serde(rename_all = "PascalCase")]` to our `SendEmailRequest` struct so that we can meet the casing requirement.
+
+#### Refactoring: Avoid Unnecessary Memory Allocations
+* For each field of `SendEmailRequest`, we are making copies of String. We can use a string slice (`&str`) to reference existing data.
+* A string slice is a just pointer to a memory buffer owned by somebody else.
+* To store a reference in a struct we need to add a lifetime parameter: it keeps track of how long those references are valid for - it’s the compiler’s job to make sure that references do not stay around longer than the memory buffer they point to.

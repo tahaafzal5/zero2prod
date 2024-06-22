@@ -181,6 +181,7 @@
       - [Error Status Codes](#error-status-codes)
       - [Timeouts](#timeouts)
       - [Refactoring: Test Helpers](#refactoring-test-helpers)
+      - [Refactoring: Fail fast](#refactoring-fail-fast)
 
 # Preface
 
@@ -1293,3 +1294,7 @@ down all tasks spawned on it are dropped.
 
 #### Refactoring: Test Helpers
 * We add functions to re-use duplicated code in our tests.
+
+#### Refactoring: Fail fast
+* The timeout for our HTTP client is currently hard-coded to 10 seconds, which means running that test takes 10 seconds -- a long time.
+* We will make the timeout configurable to keep our test suite responsive.

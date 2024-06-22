@@ -180,6 +180,7 @@
     - [Dealing With Failures](#dealing-with-failures)
       - [Error Status Codes](#error-status-codes)
       - [Timeouts](#timeouts)
+      - [Refactoring: Test Helpers](#refactoring-test-helpers)
 
 # Preface
 
@@ -1289,3 +1290,6 @@ down all tasks spawned on it are dropped.
 * `reqwest` gives us two options & we will choose the first one.
   1. we can either add a default timeout on the `Client` itself, which applies to all outgoing requests
   2. we can specify a per-request timeout
+
+#### Refactoring: Test Helpers
+* We add functions to re-use duplicated code in our tests.

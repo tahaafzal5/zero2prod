@@ -177,6 +177,9 @@
         - [Headers, Path And Method](#headers-path-and-method)
         - [Body](#body)
       - [Refactoring: Avoid Unnecessary Memory Allocations](#refactoring-avoid-unnecessary-memory-allocations)
+    - [Dealing With Failures](#dealing-with-failures)
+      - [Error Status Codes](#error-status-codes)
+      - [Timeouts](#timeouts)
 
 # Preface
 
@@ -1266,3 +1269,23 @@ down all tasks spawned on it are dropped.
 * For each field of `SendEmailRequest`, we are making copies of String. We can use a string slice (`&str`) to reference existing data.
 * A string slice is a just pointer to a memory buffer owned by somebody else.
 * To store a reference in a struct we need to add a lifetime parameter: it keeps track of how long those references are valid for - it’s the compiler’s job to make sure that references do not stay around longer than the memory buffer they point to.
+
+### Dealing With Failures
+* Two scenarios are:
+  1. non-success status codes (e.g. 4xx, 5xx, etc.)
+  2. slow responses
+
+#### Error Status Codes
+* `Reqwest`'s `send` returns an `Ok` as long as it gets a valid response from the server - no matter the status code.
+* So, we need to use `error_for_status()` in `send_email()` to turn a response into an error if the server returned an error so that our `send_email_fails_if_the_server_returns_500` test passes.
+
+#### Timeouts
+* We can instruct our mock server to wait a configurable amount of time before sending a response back using `set_delay()`.
+* We are not hanging up on the server, so the connection is busy: every time we need to send an email we will have to open a new connection.
+  * If the server does not recover fast enough, and we do not close any of the open connections, we might end up with accumulating several "hanging" requests socket exhaustion/performance degradation.
+* As a rule of thumb: every time you are performing an IO operation, always set a timeout! But what the timeout should be is an art:
+  * too low and you might overwhelm the server with retried requests
+  * too high and you risk again to see degradation on the client side
+* `reqwest` gives us two options & we will choose the first one.
+  1. we can either add a default timeout on the `Client` itself, which applies to all outgoing requests
+  2. we can specify a per-request timeout

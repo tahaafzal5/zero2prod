@@ -11,12 +11,12 @@ pub struct EmailClient {
 
 #[derive(serde::Serialize)]
 #[serde(rename_all = "PascalCase")]
-struct SendEmailRequest {
-    from: String,
-    to: String,
-    subject: String,
-    text_body: String,
-    html_body: String,
+struct SendEmailRequest<'a> {
+    from: &'a str,
+    to: &'a str,
+    subject: &'a str,
+    text_body: &'a str,
+    html_body: &'a str,
 }
 
 impl EmailClient {
@@ -43,11 +43,11 @@ impl EmailClient {
         let url = format!("{}/email", self.base_url);
 
         let request_body = SendEmailRequest {
-            from: self.sender_email.as_ref().to_owned(),
-            to: recipient.as_ref().to_owned(),
-            subject: subject.to_owned(),
-            text_body: text_content.to_owned(),
-            html_body: html_content.to_owned(),
+            from: self.sender_email.as_ref(),
+            to: recipient.as_ref(),
+            subject,
+            text_body: text_content,
+            html_body: html_content,
         };
 
         let _ = self

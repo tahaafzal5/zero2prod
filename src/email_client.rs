@@ -10,6 +10,7 @@ pub struct EmailClient {
 }
 
 #[derive(serde::Serialize)]
+#[serde(rename_all = "PascalCase")]
 struct SendEmailRequest {
     from: String,
     to: String,
@@ -66,23 +67,44 @@ impl EmailClient {
 
 #[cfg(test)]
 mod tests {
+    use crate::domain::SubscriberEmail;
     use crate::email_client::EmailClient;
     use fake::faker::lorem::en::{Paragraph, Sentence};
-    use fake::Faker;
-    use fake::{faker::internet::en::SafeEmail, Fake};
+    use fake::{faker::internet::en::SafeEmail, Fake, Faker};
     use secrecy::Secret;
-    use wiremock::{matchers::any, Mock, MockServer, ResponseTemplate};
+    use wiremock::matchers::{header, header_exists, method, path};
+    use wiremock::{Mock, MockServer, Request, ResponseTemplate};
 
-    use crate::domain::SubscriberEmail;
+    struct SendEmailBodyMatcher;
+
+    impl wiremock::Match for SendEmailBodyMatcher {
+        fn matches(&self, request: &Request) -> bool {
+            let result: Result<serde_json::Value, _> = serde_json::from_slice(&request.body);
+
+            if let Ok(body) = result {
+                body.get("From").is_some()
+                    && body.get("To").is_some()
+                    && body.get("Subject").is_some()
+                    && body.get("HtmlBody").is_some()
+                    && body.get("TextBody").is_some()
+            } else {
+                false
+            }
+        }
+    }
 
     #[tokio::test]
-    async fn send_email_fires_a_request_to_base_url() {
+    async fn send_email_send_the_expected_request() {
         let mock_server = MockServer::start().await;
         let sender_email = SubscriberEmail::parse(SafeEmail().fake()).unwrap();
         let email_client =
             EmailClient::new(mock_server.uri(), sender_email, Secret::new(Faker.fake()));
 
-        Mock::given(any())
+        Mock::given(header_exists("X-Postmark-Server-Token"))
+            .and(header("Content-Type", "application/json"))
+            .and(path("/email"))
+            .and(method("POST"))
+            .and(SendEmailBodyMatcher)
             .respond_with(ResponseTemplate::new(200))
             .expect(1)
             .mount(&mock_server)

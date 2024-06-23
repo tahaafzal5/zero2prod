@@ -193,6 +193,16 @@
     - [Sharing Startup Logic](#sharing-startup-logic)
       - [Extracting Our Startup Code](#extracting-our-startup-code)
     - [Build An API Client](#build-an-api-client)
+  - [Refocus](#refocus-1)
+  - [Zero Downtime Deployments](#zero-downtime-deployments)
+    - [Reliability](#reliability)
+    - [Deployment Strategies](#deployment-strategies)
+      - [Naive Deployment](#naive-deployment)
+      - [Load Balancers](#load-balancers)
+        - [Horizontal Scaling](#horizontal-scaling)
+        - [Health Checks](#health-checks)
+      - [Rolling Update Deployments](#rolling-update-deployments)
+      - [Digital Ocean App Platform](#digital-ocean-app-platform)
 
 # Preface
 
@@ -1154,23 +1164,6 @@ down all tasks spawned on it are dropped.
 * Once they click on it, we will send a 200 OK to the browser.
 * From that point onwards, they will receive all newsletter issues in their inbox.
 
-* Every time a user wants to subscribe, they fire a `POST /subscriptions` request
-* Our request handler will:
-  1. add their details to our database in the `subscriptions` table, with `status` equal to `pending_confirmation`
-  2. generate a unique `subscription_token`
-  3. store `subscription_token` in our database against their `id` in a `subscription_tokens` table;
-  4. send an email to the new subscriber containing a link structured as `https://<api-domain>/subscriptions/confirm?token=<subscription_token>`
-  5. return a 200 OK.
-
-* Once they click on the link, a browser tab will open to send a `GET /subscriptions/confirm` endpoint request.
-* Our request handler will:
-  1. retrieve `subscription_token` from the query parameters
-  2. retrieve the subscriber `id` associated with `subscription_token` from the `subscription_tokens` table
-  3. update the subscriber `status` from `pending_confirmation` to `active` in the `subscriptions` table
-  4. return a 200 OK.
-
-* There are a few other possible designs (e.g. use a JWT instead of a unique token) and we have a few corner cases to handle (e.g. what happens if they click on the link twice or if they try to subscribe twice?).
-
 ### The Implementation Strategy
 * There is a lot to do here, so we will split the work in three conceptual chunks:
   1. write a module to send an email
@@ -1363,3 +1356,72 @@ down all tasks spawned on it are dropped.
 * As we write tests, we necessarily end up implementing a client for our API.
 * It gives us a prime opportunity to see what it feels like to interact with the API as a user.
 * We can add a function to `TestApp` to share some of the duplicated code in tests/api/subscriptions.rs.
+
+## Refocus
+* Every time a user wants to subscribe, they fire a `POST /subscriptions` request
+* Our request handler will:
+  1. add their details to our database in the `subscriptions` table, with `status` equal to `pending_confirmation`
+  2. generate a unique `subscription_token`
+  3. store `subscription_token` in our database against their `id` in a `subscription_tokens` table;
+  4. send an email to the new subscriber containing a link structured as `https://<api-domain>/subscriptions/confirm?token=<subscription_token>`
+  5. return a 200 OK.
+
+* Once they click on the link, a browser tab will open to send a `GET /subscriptions/confirm` endpoint request.
+* Our request handler will:
+  1. retrieve `subscription_token` from the query parameters
+  2. retrieve the subscriber `id` associated with `subscription_token` from the `subscription_tokens` table
+  3. update the subscriber `status` from `pending_confirmation` to `active` in the `subscriptions` table
+  4. return a 200 OK.
+
+* There are a few other possible designs (e.g. use a JWT instead of a unique token) and we have a few corner cases to handle (e.g. what happens if they click on the link twice or if they try to subscribe twice?).
+* We need to find an implementation route that can be rolled out with **zero downtime**.
+
+## Zero Downtime Deployments
+
+### Reliability
+* There is no silver bullet to build a highly available solution: it requires work from the application layer all the way down to the infrastructure layer.
+* One thing is certain, though: if you want to operate a highly available service, you should master **zero downtime deployments** - users should be able to use the service before, during and after the rollout of a new version of the application to production.
+* This is even more important if you are practising continuous deployment: you cannot release multiple times a day if every release triggers a small outage.
+
+### Deployment Strategies
+
+#### Naive Deployment
+* THe "naive” approach looks like:
+  * Version A of our service is running in production and we want to roll out version B
+    * We switch off all instances of version A running the cluster
+    * We spin up new instances of our application running version B
+    * We start serving traffic using version B
+  * There is a non-zero amount of time where there is no application running in the cluster able to serve user traffic - we are experiencing downtime.
+
+#### Load Balancers
+* We have multiple copies of our application running behind a **load balancer**.
+  ![Load Balancer](/assets/images/load_balancer.png)
+* Even if we have 1 replica of our application running, there is a load balancer between users and the application. Deployments are still performed using a rolling update strategy.
+* Each replica of our application is registered with the load balancer as a **backend**.
+* Every time somebody sends a request to our API, they hit our load balancer which is then in charge of choosing one of the available backends to fulfill the incoming request.
+* Load balancers usually support adding (and removing) backends **dynamically**.
+* This enables a few interesting patterns described below.
+
+##### Horizontal Scaling
+* We add more capacity when experiencing a spike in traffic by spinning up more replicas of our application.
+* It helps spread the load until the work expected of a single instance becomes manageable.
+
+##### Health Checks
+* We can ask the load balancer to keep an eye on the **health** of the registered backends.
+* Health checking can be:
+  1. Passive: the load balancer looks at the distribution of status codes/latency for each backend to determine if they are healthy or not.
+  2. Active: the load balancer is configured to send a health check request to each backend on a schedule. If a backend fails to respond with a success code for a set time period, it is marked as unhealthy and removed.
+* This is a critical capability to achieve **self-healing** in a cloud-native environment: the platform can detect if an application is not behaving as expected and automatically remove it from the list of available backends to mitigate or nullify the impact on users.
+
+#### Rolling Update Deployments
+* We can leverage our load balancer to perform zero downtime deployments.
+* Rolling updates:
+  * Assume we have three replicas of version A of our application registered as backends for our load balancer.
+  * We want to deploy version B.
+  * We start by spinning up one replica of version B of our application.
+  * When the application is ready to serve traffic (i.e. a few health check requests have succeeded) we register it as a backend with our load balancer.
+  * If all is well, we switch off one of the replicas running version A.
+  * We continue this until all instances of version A have been replaced by version B.
+
+#### Digital Ocean App Platform
+* Digital Ocean boasts zero downtime deployment out-of-the-box, but without details on how it is achieved, however experiments have shown they are using rolling updates.

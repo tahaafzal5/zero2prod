@@ -2,12 +2,28 @@ use once_cell::sync::Lazy;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use uuid::Uuid;
 use zero2prod::configuration::{get_configuration, DatabaseSettings};
-use zero2prod::startup::{get_connection_pool, Application};
+use zero2prod::routes::subscriptions_route;
+use zero2prod::startup::{get_connection_pool, header, Application};
 use zero2prod::telemetry::{get_subscriber, init_subscriber};
 
 pub struct TestApp {
     pub address: String,
     pub connection_pool: PgPool,
+}
+
+impl TestApp {
+    pub async fn send_subscription_request(&self, body: String) -> reqwest::Response {
+        let post_request_header = header();
+        let request = format!("{}{}", &self.address, subscriptions_route());
+
+        reqwest::Client::new()
+            .post(request)
+            .header(&post_request_header.name, &post_request_header.value)
+            .body(body)
+            .send()
+            .await
+            .expect("Failed to execute POST request")
+    }
 }
 
 // Ensure that the `tracing` stack is only initialised once using `once_cell`

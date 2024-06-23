@@ -192,6 +192,7 @@
     - [Sharing Test Helpers](#sharing-test-helpers)
     - [Sharing Startup Logic](#sharing-startup-logic)
       - [Extracting Our Startup Code](#extracting-our-startup-code)
+    - [Build An API Client](#build-an-api-client)
 
 # Preface
 
@@ -1356,3 +1357,9 @@ down all tasks spawned on it are dropped.
   4. Build the application
   5. Launch the application as a background task and return a set of resources to interact with it
 * We will add an `Application` struct and re-arrange things around to do the same but re-use code.
+
+### Build An API Client
+* All of our integration tests are black-box: we launch our application at the beginning of each test and interact with it using an HTTP client (i.e. `reqwest`).
+* As we write tests, we necessarily end up implementing a client for our API.
+* It gives us a prime opportunity to see what it feels like to interact with the API as a user.
+* We can add a function to `TestApp` to share some of the duplicated code in tests/api/subscriptions.rs.

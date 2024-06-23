@@ -1,10 +1,8 @@
 use once_cell::sync::Lazy;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
-use std::net::TcpListener;
 use uuid::Uuid;
 use zero2prod::configuration::{get_configuration, DatabaseSettings};
-use zero2prod::email_client::EmailClient;
-use zero2prod::startup::run;
+use zero2prod::startup::{get_connection_pool, Application};
 use zero2prod::telemetry::{get_subscriber, init_subscriber};
 
 pub struct TestApp {
@@ -31,42 +29,33 @@ pub async fn spawn_app() -> TestApp {
     // All other invocations will instead skip execution.
     Lazy::force(&TRACING);
 
-    let mut configuration = get_configuration().expect("Failed to read configuration");
-
     // Database
-    let host = &configuration.database.host;
-    let listener =
-        TcpListener::bind(format!("{}:0", host)).expect("Failed to bind to a random port");
-    let port = listener.local_addr().unwrap().port();
-    let address = format!("http://{}:{}", host, port);
+    let configuration = {
+        let mut config = get_configuration().expect("Failed to read configuration");
+        config.database.database_name = Uuid::new_v4().to_string();
+        config.application.port = 0;
 
-    configuration.database.database_name = Uuid::new_v4().to_string();
+        config
+    };
+    configure_database(&configuration.database).await;
 
-    let connection_pool = configure_database(&configuration.database).await;
+    // Application
+    let application = Application::build(configuration.clone())
+        .await
+        .expect("Failed to build application");
 
-    // Email Client
-    let sender_email = configuration
-        .email_client
-        .sender_email()
-        .expect("Invalid sender email address");
-
-    let timeout = configuration.email_client.timeout();
-    let email_client = EmailClient::new(
-        configuration.email_client.base_url,
-        sender_email,
-        configuration.email_client.authorization_token,
-        timeout,
+    let address = format!(
+        "http://{}:{}",
+        configuration.database.host,
+        application.port()
     );
 
-    let server =
-        run(listener, connection_pool.clone(), email_client).expect("Failed to bind address");
-
     // Launch our application in the background
-    tokio::spawn(server);
+    tokio::spawn(application.run_until_stopped());
 
     TestApp {
         address,
-        connection_pool,
+        connection_pool: get_connection_pool(&configuration.database),
     }
 }
 
@@ -74,7 +63,7 @@ pub async fn spawn_app() -> TestApp {
 Create a new database with a new/random name for each test for test isolation.
 We then also need to run migrations on this new database.
 */
-pub async fn configure_database(config: &DatabaseSettings) -> PgPool {
+pub async fn configure_database(config: &DatabaseSettings) {
     let mut connection = PgConnection::connect_with(&config.without_db())
         .await
         .expect("Failed to connect to Postgres");
@@ -95,6 +84,4 @@ pub async fn configure_database(config: &DatabaseSettings) -> PgPool {
         .run(&connection_pool)
         .await
         .expect("Failed to migrate database");
-
-    connection_pool
 }

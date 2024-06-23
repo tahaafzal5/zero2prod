@@ -1349,4 +1349,10 @@ down all tasks spawned on it are dropped.
 
 #### Extracting Our Startup Code
 * We moved some code from `main` to `build()` in startup.rs
-* 
+* In `spawn_app`, we have the following phases:
+  1. Execute test-specific setup (i.e. initialize a `tracing` subscriber)
+  2. Randomize the configuration to ensure tests do not interfere with each other (i.e. a different logical database for each test case)
+  3. Initialize external resources (e.g. create and migrate the database)
+  4. Build the application
+  5. Launch the application as a background task and return a set of resources to interact with it
+* We will add an `Application` struct and re-arrange things around to do the same but re-use code.

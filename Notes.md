@@ -182,6 +182,14 @@
       - [Timeouts](#timeouts)
       - [Refactoring: Test Helpers](#refactoring-test-helpers)
       - [Refactoring: Fail fast](#refactoring-fail-fast)
+  - [Skeleton And Principles For A Maintainable Test Suite](#skeleton-and-principles-for-a-maintainable-test-suite)
+    - [Why Do We Write Tests?](#why-do-we-write-tests)
+    - [Why Don't We Write Tests?](#why-dont-we-write-tests)
+    - [Test Code Is Still Code](#test-code-is-still-code)
+    - [Our Test Suite](#our-test-suite)
+    - [Test Discovery](#test-discovery)
+    - [One Test File, One Crate](#one-test-file-one-crate)
+    - [Sharing Test Helpers](#sharing-test-helpers)
 
 # Preface
 
@@ -1298,3 +1306,37 @@ down all tasks spawned on it are dropped.
 #### Refactoring: Fail fast
 * The timeout for our HTTP client is currently hard-coded to 10 seconds, which means running that test takes 10 seconds -- a long time.
 * We will make the timeout configurable to keep our test suite responsive.
+
+## Skeleton And Principles For A Maintainable Test Suite
+
+### Why Do We Write Tests?
+* Tests mitigate risks, catch bugs in CI, and acr as documentation.
+
+### Why Don't We Write Tests?
+* Good tests build technical leverage, but writing tests takes time. 
+
+### Test Code Is Still Code
+* As the project evolves, there is more friction to add tests - it gets progressively more cumbersome to write new tests.
+
+### Our Test Suite
+* All our integration tests live within a single file, tests/health_check.rs.
+
+### Test Discovery
+* Our main goal in this refactoring is discoverability:
+  * given an application endpoint it should be easy to find the corresponding integration tests within the tests folder
+  * when writing a test, it should be easy to find the relevant test helper functions
+
+### One Test File, One Crate
+* The `tests` folder is somewhat special - cargo knows to look into it searching for integration tests.
+* Each file within the `tests` folder gets compiled as its own crate and is its own executable.
+* If we look in `target/debug/deps`, we will see 1 `health_check-*.d` file -- which is our integration tests as confirmed if we run it like `./target/debug/deps/health_check-*`
+
+### Sharing Test Helpers
+* If each integration test file is its own executable, how do we share test helpers functions?
+* We have 2 options:
+  1. define a stand-alone module - e.g. `tests/helpers/mod.rs` to add common functions and then refer to `helpers` in your test files.
+  2. take full advantage of that each file under tests is its own executable - we can create sub-modules scoped to a single test executable.
+* The first approach will lead to "function is never used warnings"
+  * The issue is that `helpers` is bundled as a sub-module, it is not invoked as a third-party crate: `cargo` compiles each test executable in isolation and warns us if, for a specific test file, one or more public functions in helpers have never been invoked. This is bound to happen as your test suite grows - not all test files will use all your helper methods.
+* With the 2nd approach, we can add each test file separately with in `tests/api/` with `mod.rs` and `helpers.rs` files.
+* While each executable is compiled in parallel, the linking phase is instead entirely sequential. So, bundling all your test cases in a single executable reduces the time spent compiling your test suite in CI, but this structure organizes our tests better.

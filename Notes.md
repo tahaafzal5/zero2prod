@@ -203,6 +203,14 @@
         - [Health Checks](#health-checks)
       - [Rolling Update Deployments](#rolling-update-deployments)
       - [Digital Ocean App Platform](#digital-ocean-app-platform)
+  - [Database Migrations](#database-migrations-1)
+    - [Deployments And Migrations](#deployments-and-migrations)
+    - [Multi-step Migrations](#multi-step-migrations)
+    - [A New Mandatory Column](#a-new-mandatory-column)
+      - [Step 1: Add As Optional](#step-1-add-as-optional)
+      - [Step 2: Start Using The New Column](#step-2-start-using-the-new-column)
+      - [Step 3: Backfill And Mark As `NOT NULL`](#step-3-backfill-and-mark-as-not-null)
+    - [A New Table](#a-new-table)
 
 # Preface
 
@@ -1425,3 +1433,54 @@ down all tasks spawned on it are dropped.
 
 #### Digital Ocean App Platform
 * Digital Ocean boasts zero downtime deployment out-of-the-box, but without details on how it is achieved, however experiments have shown they are using rolling updates.
+
+## Database Migrations
+* To ensure high availability in a fault-prone environment, cloud-native applications are **stateless** - they delegate all persistence concerns to external systems (i.e. databases).
+* That’s why load balancing works: all backends are talking to the same database to query and manipulate the same **state**.
+* The database can be thought of as a single gigantic global variable. Continuously accessed and mutated by all replicas of our application.
+
+### Deployments And Migrations
+* During a rolling update deployment, the old and the new version of the application are both serving live traffic, side by side.
+* So, the old and the new version of the application are using the **same database at the same time**.
+* To avoid downtime, we need a database schema that is understood by both versions.
+* This is not an issue for most of our deployments, but it is a serious constraint when we need to evolve the schema.
+* To move forward with the implementation strategy for confirmation emails, we need to evolve our database schema as:
+  1. add a new table `subscriptions_tokens`
+  2. add a new mandatory column, `status`, to the existing `subscription` table.
+
+* Possible scenarios showing we cannot possibly deploy confirmation emails all at once without incurring downtime:
+  * We could first migrate the database and then deploy the new version.
+    * This implies that the current version is running against the migrated database for some time: our current implementation of `POST /subscriptions` does not know about `status` and it tries to insert new rows into  `subscriptions` without populating it.
+    * Given that `status` is a madatory field, all inserts would fail - we would not be able to accept new subscribers until the new version of the application is deployed.
+  * We could first deploy the new version and then migrate the database.
+    * We get the opposite scenario.
+    * When `POST /subscriptions` is called, it tries to insert a row into `subscriptions` with a `status` field that does not exist - all inserts fail and we cannot accept new subscribers until the database is migrated.
+
+### Multi-step Migrations
+* A big bang release won’t work - we need to get there in multiple, smaller steps. We'll keep the application code stable and migrate the database.
+
+### A New Mandatory Column
+* We look ath the `status` column
+
+#### Step 1: Add As Optional
+1. We generate and run a new migration script to add `status` as an optional field to our table.
+2. We test the migration and our tests on our local database to confirm all is good before running the migration on our production database.
+
+#### Step 2: Start Using The New Column
+1. We can start using `status`, every time a new subscriber is inserted, we set `status` to `confirmed` by changing our `INSERT` query in our application.
+2. Again, we run the tests and then deploy the new version of the application to production.
+
+#### Step 3: Backfill And Mark As `NOT NULL`
+* The latest version of the application ensures that status is populated for all new subscribers.
+* To mark `status` as `NOT NULL` we just need to backfill the value for historical records: we’ll then be free to alter the column.
+1. We generate a new migration sciprt to mark `status` as `NOT NULL` and backfill `status` for historical entries with `confirmed`.
+2. Migrate our local database, run tests, and deploy to production database.
+
+### A New Table
+* This is easier.
+* We add the new table in a migration while the application keeps ignoring it.
+* We can then deploy a new version of the application that uses it to enable confirmation emails.
+1. The migration script will add a table with the necessary columns.
+2. We migrate our local database, run tests, and deploy to production.
+
+**Note: We add a migration script with `sqlx migrate <script-name>`**

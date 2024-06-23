@@ -1,12 +1,46 @@
 use crate::{
+    configuration::Settings,
     email_client::EmailClient,
     routes::{health_check, health_check_route, subscribe, subscriptions_route},
 };
 
 use actix_web::{dev::Server, web, App, HttpServer};
+use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
 use std::net::TcpListener;
 use tracing_actix_web::TracingLogger;
+
+pub async fn build(configuration: Settings) -> Result<Server, std::io::Error> {
+    // Application
+    let address = format!(
+        "{}:{}",
+        configuration.application.host, configuration.application.port
+    );
+
+    let listener = TcpListener::bind(address).expect(&format!(
+        "Failed to bind to port {}",
+        configuration.application.port
+    ));
+
+    // Database
+    let connection_pool = PgPoolOptions::new().connect_lazy_with(configuration.database.with_db());
+
+    // Email Client
+    let sender_email = configuration
+        .email_client
+        .sender_email()
+        .expect("Invalid sender email address.");
+
+    let timeout = configuration.email_client.timeout();
+    let email_client = EmailClient::new(
+        configuration.email_client.base_url,
+        sender_email,
+        configuration.email_client.authorization_token,
+        timeout,
+    );
+
+    run(listener, connection_pool, email_client)
+}
 
 pub fn run(
     listener: TcpListener,

@@ -190,6 +190,8 @@
     - [Test Discovery](#test-discovery)
     - [One Test File, One Crate](#one-test-file-one-crate)
     - [Sharing Test Helpers](#sharing-test-helpers)
+    - [Sharing Startup Logic](#sharing-startup-logic)
+      - [Extracting Our Startup Code](#extracting-our-startup-code)
 
 # Preface
 
@@ -1338,5 +1340,13 @@ down all tasks spawned on it are dropped.
   2. take full advantage of that each file under tests is its own executable - we can create sub-modules scoped to a single test executable.
 * The first approach will lead to "function is never used warnings"
   * The issue is that `helpers` is bundled as a sub-module, it is not invoked as a third-party crate: `cargo` compiles each test executable in isolation and warns us if, for a specific test file, one or more public functions in helpers have never been invoked. This is bound to happen as your test suite grows - not all test files will use all your helper methods.
-* With the 2nd approach, we can add each test file separately with in `tests/api/` with `mod.rs` and `helpers.rs` files.
-* While each executable is compiled in parallel, the linking phase is instead entirely sequential. So, bundling all your test cases in a single executable reduces the time spent compiling your test suite in CI, but this structure organizes our tests better.
+* With the 2nd approach, we can add each test file separately with in `tests/api/` with `main.rs` and `helpers.rs` files.
+* Each executable is compiled in parallel, the linking phase is instead entirely sequential. So, bundling all your test cases in a single executable like us reduces the time spent compiling your test suite in CI.
+
+### Sharing Startup Logic
+* `spawn_app` in tests and our application's `main` looks very similar & whenever we change something in `main`, we need to make the same change in `spawn_app` too.
+* This duplication also means that our application's `main` is never tested.
+
+#### Extracting Our Startup Code
+* We moved some code from `main` to `build()` in startup.rs
+* 

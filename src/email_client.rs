@@ -69,6 +69,10 @@ impl EmailClient {
     }
 }
 
+pub fn email_route() -> String {
+    String::from("/email")
+}
+
 #[cfg(test)]
 mod tests {
     use crate::domain::SubscriberEmail;

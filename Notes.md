@@ -211,6 +211,10 @@
       - [Step 2: Start Using The New Column](#step-2-start-using-the-new-column)
       - [Step 3: Backfill And Mark As `NOT NULL`](#step-3-backfill-and-mark-as-not-null)
     - [A New Table](#a-new-table)
+  - [Sending A Confirmation Email](#sending-a-confirmation-email)
+    - [A Static Email](#a-static-email)
+      - [Red Test](#red-test)
+      - [Green Test](#green-test)
 
 # Preface
 
@@ -1484,3 +1488,16 @@ down all tasks spawned on it are dropped.
 2. We migrate our local database, run tests, and deploy to production.
 
 **Note: We add a migration script with `sqlx migrate <script-name>`**
+
+## Sending A Confirmation Email
+
+### A Static Email
+* We will test that `POST /subscriptions` is sending out an email without focusing on the body of the email for now.
+
+#### Red Test
+* We need to spin up a mock server to stand in for Postmark’s API and intercept outgoing requests.
+* We add a `subscribe_sends_a_confirmation_email_for_valid_data` test.
+
+#### Green Test
+* We add the necessary changes to make the test green.
+  * This includes adding a mock for `subscribe_returns_a_200_for_valid_form_data` which would now fail since it tries to send an email.

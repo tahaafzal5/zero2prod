@@ -1,8 +1,19 @@
+use wiremock::matchers::{method, path};
+use wiremock::{Mock, ResponseTemplate};
+use zero2prod::email_client::email_route;
+
 use crate::helpers::spawn_app;
 
 #[tokio::test]
 async fn subscribe_returns_a_200_for_valid_form_data() {
     let app = spawn_app().await;
+
+    Mock::given(path(email_route()))
+        .and(method("POST"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(1)
+        .mount(&app.email_server)
+        .await;
 
     let body = format!("name=Taha%20Afzal&email=tahaafzal5%40hotmail.com");
     let response = app.send_subscription_request(body.into()).await;
@@ -61,4 +72,21 @@ async fn subscribe_returns_a_400_when_fields_are_present_but_invalid() {
             description
         );
     }
+}
+
+#[tokio::test]
+async fn subscribe_sends_a_confirmation_email_for_valid_data() {
+    let app = spawn_app().await;
+    let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
+
+    Mock::given(path(email_route()))
+        .and(method("POST"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(1)
+        .mount(&app.email_server)
+        .await;
+
+    app.send_subscription_request(body.into()).await;
+
+    // Mock asserts on drop
 }

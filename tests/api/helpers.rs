@@ -1,6 +1,7 @@
 use once_cell::sync::Lazy;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use uuid::Uuid;
+use wiremock::MockServer;
 use zero2prod::configuration::{get_configuration, DatabaseSettings};
 use zero2prod::routes::subscriptions_route;
 use zero2prod::startup::{get_connection_pool, header, Application};
@@ -9,6 +10,7 @@ use zero2prod::telemetry::{get_subscriber, init_subscriber};
 pub struct TestApp {
     pub address: String,
     pub connection_pool: PgPool,
+    pub email_server: MockServer,
 }
 
 impl TestApp {
@@ -45,11 +47,16 @@ pub async fn spawn_app() -> TestApp {
     // All other invocations will instead skip execution.
     Lazy::force(&TRACING);
 
+    // Mock Email Sever
+    let email_server = MockServer::start().await;
+
     // Database
     let configuration = {
         let mut config = get_configuration().expect("Failed to read configuration");
         config.database.database_name = Uuid::new_v4().to_string();
         config.application.port = 0;
+
+        config.email_client.base_url = email_server.uri();
 
         config
     };
@@ -72,6 +79,7 @@ pub async fn spawn_app() -> TestApp {
     TestApp {
         address,
         connection_pool: get_connection_pool(&configuration.database),
+        email_server,
     }
 }
 

@@ -57,7 +57,7 @@ async fn send_confirmation_email(
         confirmation_link
     );
     let text_body = format!(
-        "Welcome to our newsletter!\nClick {} to confirm your subcription.",
+        "Welcome to my newsletter!\nClick {} to confirm your subcription.",
         confirmation_link
     );
 

@@ -215,6 +215,9 @@
     - [A Static Email](#a-static-email)
       - [Red Test](#red-test)
       - [Green Test](#green-test)
+    - [A Static Confirmation Link](#a-static-confirmation-link)
+      - [Red Test](#red-test-1)
+      - [Green Test](#green-test-1)
 
 # Preface
 
@@ -1501,3 +1504,14 @@ down all tasks spawned on it are dropped.
 #### Green Test
 * We add the necessary changes to make the test green.
   * This includes adding a mock for `subscribe_returns_a_200_for_valid_form_data` which would now fail since it tries to send an email.
+
+### A Static Confirmation Link
+* We will scan the body of the email to retrieve a confirmation link.
+
+#### Red Test
+* For now, we will just test that there is something that is a link.
+* We can use `received_requests` on `MockServer` to intercept all the requests (as a vector) intercepted by the server if the request recording is enabled (the default).
+* To extract links out of the email body, we will use `linkify` and make sure the 1 link exists in the html body and 1 in the text body and that both links are identical.
+
+#### Green Test
+* We add a dummy confirmation link to the email to pass the test.

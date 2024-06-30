@@ -73,6 +73,10 @@ pub fn email_route() -> String {
     String::from("/email")
 }
 
+pub fn subscriptions_confirm_route() -> String {
+    String::from("/subscriptions/confirm")
+}
+
 #[cfg(test)]
 mod tests {
     use crate::domain::SubscriberEmail;

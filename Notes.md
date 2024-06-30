@@ -218,6 +218,9 @@
     - [A Static Confirmation Link](#a-static-confirmation-link)
       - [Red Test](#red-test-1)
       - [Green Test](#green-test-1)
+    - [Pending Confirmation](#pending-confirmation)
+      - [Red Test](#red-test-2)
+      - [Green Test](#green-test-2)
 
 # Preface
 
@@ -1515,3 +1518,12 @@ down all tasks spawned on it are dropped.
 
 #### Green Test
 * We add a dummy confirmation link to the email to pass the test.
+
+### Pending Confirmation
+* We will set a new subscriber's status to `pending_confirmation` instead of `confirmed`.
+
+#### Red Test
+* We will look at the `status` of a new subscriber.
+
+#### Green Test
+* Instead of inserting `confirmed`, we will insert `pending_confirmation` when a new subscriber signs up.

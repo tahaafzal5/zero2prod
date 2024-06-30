@@ -19,6 +19,21 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
     let response = app.send_subscription_request(body.into()).await;
 
     assert!(response.status().is_success());
+}
+
+#[tokio::test]
+async fn subscribe_persists_the_new_subscriber() {
+    let app = spawn_app().await;
+
+    Mock::given(path(email_route()))
+        .and(method("POST"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(1)
+        .mount(&app.email_server)
+        .await;
+
+    let body = format!("name=Taha%20Afzal&email=tahaafzal5%40hotmail.com");
+    app.send_subscription_request(body.into()).await;
 
     let saved = sqlx::query!("SELECT email, name FROM subscriptions")
         .fetch_one(&app.connection_pool)

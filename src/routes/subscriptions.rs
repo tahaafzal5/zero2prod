@@ -36,22 +36,7 @@ pub async fn subscribe(
         return HttpResponse::InternalServerError().finish();
     };
 
-    let confirmation_link = "https://there-is-no-such-domain.com/subscriptions/confirm";
-
-    if email_client
-        .send_email(
-            new_subscriber.email,
-            "Welcome!",
-            &format!(
-                "Welcome to my newsletter<br />\
-                Click <a href=\"{}\">here</a> to confirm your subscription.",
-                confirmation_link
-            ),
-            &format!(
-                "Welcome to our newsletter!\nClick {} to confirm your subcription.",
-                confirmation_link
-            ),
-        )
+    if send_confirmation_email(&email_client, &new_subscriber)
         .await
         .is_err()
     {
@@ -59,6 +44,26 @@ pub async fn subscribe(
     }
 
     return HttpResponse::Ok().finish();
+}
+
+async fn send_confirmation_email(
+    email_client: &EmailClient,
+    new_subscriber: &NewSubscriber,
+) -> Result<(), reqwest::Error> {
+    let confirmation_link = "https://there-is-no-such-domain.com/subscriptions/confirm";
+    let html_body = format!(
+        "Welcome to my newsletter<br />\
+                Click <a href=\"{}\">here</a> to confirm your subscription.",
+        confirmation_link
+    );
+    let text_body = format!(
+        "Welcome to our newsletter!\nClick {} to confirm your subcription.",
+        confirmation_link
+    );
+
+    email_client
+        .send_email(&new_subscriber.email, "Welcome!", &html_body, &text_body)
+        .await
 }
 
 #[tracing::instrument(

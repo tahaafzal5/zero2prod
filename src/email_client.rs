@@ -38,7 +38,7 @@ impl EmailClient {
 
     pub async fn send_email(
         &self,
-        recipient: SubscriberEmail,
+        recipient: &SubscriberEmail,
         subject: &str,
         html_body: &str,
         text_body: &str,
@@ -143,7 +143,7 @@ mod tests {
         let body = body();
 
         let _ = email_client
-            .send_email(subscriber_email, &subject, &body, &body)
+            .send_email(&subscriber_email, &subject, &body, &body)
             .await;
 
         // Assert
@@ -173,7 +173,7 @@ mod tests {
         let body = body();
 
         let result = email_client
-            .send_email(recipient, &subject, &body, &body)
+            .send_email(&recipient, &subject, &body, &body)
             .await;
 
         assert_ok!(result);
@@ -195,7 +195,7 @@ mod tests {
             .await;
 
         let result = email_client
-            .send_email(recipient, &subject, &body, &body)
+            .send_email(&recipient, &subject, &body, &body)
             .await;
 
         assert_err!(result);
@@ -219,7 +219,7 @@ mod tests {
             .await;
 
         let result = email_client
-            .send_email(recipient, &subject, &body, &body)
+            .send_email(&recipient, &subject, &body, &body)
             .await;
 
         assert_err!(result);

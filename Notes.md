@@ -221,6 +221,9 @@
     - [Pending Confirmation](#pending-confirmation)
       - [Red Test](#red-test-2)
       - [Green Test](#green-test-2)
+    - [Skeleton of `GET /subscriptions/confirm`](#skeleton-of-get-subscriptionsconfirm)
+      - [Red Test](#red-test-3)
+      - [Green Test](#green-test-3)
 
 # Preface
 
@@ -1527,3 +1530,16 @@ down all tasks spawned on it are dropped.
 
 #### Green Test
 * Instead of inserting `confirmed`, we will insert `pending_confirmation` when a new subscriber signs up.
+
+### Skeleton of `GET /subscriptions/confirm`
+* We want to build up the skeleton of the endpoint - we need to register the handler against the path in src/startup.rs and reject incoming requests without the required query parameter, `subscription_token`.
+
+#### Red Test
+* We will add a new module for tests relating to the confirmaiton callback.
+
+#### Green Test
+* We want to make sure that there is a `subscription_token` query parameter: we can use `actix-web`'s extractor: `Query`.
+* The `Parameters` struct defines all the query parameters that we *expect* to see in the incoming request.
+* It needs to implement `serde::Deserialize` to enable` actix-web` to build it from the incoming request path.
+* A function parameter of type `web::Query<Parameter>` is enough to instruct `actix-web` to only call the handler if the extraction was successful
+* If the extraction failed a 400 Bad Request is automatically returned.

@@ -227,6 +227,7 @@
     - [Connecting The Dots](#connecting-the-dots)
       - [Red Test](#red-test-4)
       - [Green Test](#green-test-4)
+      - [Refactor](#refactor)
 
 # Preface
 
@@ -1559,3 +1560,6 @@ down all tasks spawned on it are dropped.
   * `reqwest::Client` will fail to establish a connection since `port` will be `None` when sending requests to `http:127.0.0.1/subscriptions/confirm` without specifying the port for our test server.
   * This is non-issue for production workloads where the DNS domain is enough, so we’ll just patch it in the test by storing a port in `TestApp`.
   * We will also add a `subscription_token` query parameter to the confirmation link.
+
+#### Refactor
+* We will add a `get_confirmation_links` function to do all the work in extracting the links from the body, setting the port in the confirmation link, etc.

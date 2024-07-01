@@ -18,7 +18,7 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
     let body = format!("name=Taha%20Afzal&email=tahaafzal5%40hotmail.com");
     let response = app.send_subscription_request(body.into()).await;
 
-    assert!(response.status().is_success());
+    assert_eq!(response.status().as_u16(), 200);
 }
 
 #[tokio::test]

@@ -11,6 +11,7 @@ pub struct TestApp {
     pub address: String,
     pub connection_pool: PgPool,
     pub email_server: MockServer,
+    pub port: u16,
 }
 
 impl TestApp {
@@ -66,6 +67,7 @@ pub async fn spawn_app() -> TestApp {
     let application = Application::build(configuration.clone())
         .await
         .expect("Failed to build application");
+    let port = application.port();
 
     let address = format!(
         "http://{}:{}",
@@ -78,6 +80,7 @@ pub async fn spawn_app() -> TestApp {
 
     TestApp {
         address,
+        port,
         connection_pool: get_connection_pool(&configuration.database),
         email_server,
     }

@@ -16,6 +16,12 @@ services:
     routes:
       - path: /
     envs:
+      # Application
+      - key: APP_APPLICAITON__BASE_URL
+        scope: RUN_TIME
+        value: ${APP_URL}
+        
+      # Database
       - key: APP_DATABASE__USERNAME
         scope: RUN_TIME
         value: ${newsletter.USERNAME}

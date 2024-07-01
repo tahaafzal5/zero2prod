@@ -224,6 +224,9 @@
     - [Skeleton of `GET /subscriptions/confirm`](#skeleton-of-get-subscriptionsconfirm)
       - [Red Test](#red-test-3)
       - [Green Test](#green-test-3)
+    - [Connecting The Dots](#connecting-the-dots)
+      - [Red Test](#red-test-4)
+      - [Green Test](#green-test-4)
 
 # Preface
 
@@ -1543,3 +1546,16 @@ down all tasks spawned on it are dropped.
 * It needs to implement `serde::Deserialize` to enable` actix-web` to build it from the incoming request path.
 * A function parameter of type `web::Query<Parameter>` is enough to instruct `actix-web` to only call the handler if the extraction was successful
 * If the extraction failed a 400 Bad Request is automatically returned.
+
+### Connecting The Dots
+
+#### Red Test
+* We will behave like a user: we will call `POST /subscriptions`, extract the confirmation link from the outgoing email request, and then call it to confirm our subscription expecting a 200 OK.
+
+#### Green Test
+* The domain & protocol will vary based on the environment that we're running in. http://127.0.0.1 for our tests and another with HTTPS in production, so we can add a new field in `ApplicationSettings` to make this configurable.
+* We also need to update `spec.yaml` to add the `APP_URL` and get the app identifier from `doctl apps list --format ID` and run `doctl apps update $APP_ID --spec spec.yaml` to apply these changes to DigitalOcean.
+* Our test will still fail:
+  * `reqwest::Client` will fail to establish a connection since `port` will be `None` when sending requests to `http:127.0.0.1/subscriptions/confirm` without specifying the port for our test server.
+  * This is non-issue for production workloads where the DNS domain is enough, so we’ll just patch it in the test by storing a port in `TestApp`.
+  * We will also add a `subscription_token` query parameter to the confirmation link.

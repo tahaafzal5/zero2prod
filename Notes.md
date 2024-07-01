@@ -228,6 +228,9 @@
       - [Red Test](#red-test-4)
       - [Green Test](#green-test-4)
       - [Refactor](#refactor)
+    - [Subscription Tokens](#subscription-tokens)
+      - [Red Test](#red-test-5)
+      - [Green Test](#green-test-5)
 
 # Preface
 
@@ -1563,3 +1566,16 @@ down all tasks spawned on it are dropped.
 
 #### Refactor
 * We will add a `get_confirmation_links` function to do all the work in extracting the links from the body, setting the port in the confirmation link, etc.
+
+### Subscription Tokens
+
+#### Red Test
+* We will add another test to confirm that clicking on a confirmation link would make a subscriber's `status` confirmed.
+
+#### Green Test
+* We will use a cryptographically secure pseudorandom number generator - a `CSPRNG` as our subscription token using `rand` and store it with the corresponding subscriber's id.
+* On the `GET /subscriptions/confirm` side, we need to:
+  1. get a reference to the database pool,
+  2. retrieve the subscriber id associated with the token (if one exists)
+  3. change the subscriber status to `confirmed`
+ 

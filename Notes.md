@@ -231,6 +231,10 @@
     - [Subscription Tokens](#subscription-tokens)
       - [Red Test](#red-test-5)
       - [Green Test](#green-test-5)
+  - [Database Transactions](#database-transactions)
+    - [All Or Nothing](#all-or-nothing)
+    - [Transactions In Postgres](#transactions-in-postgres)
+    - [Transactions In Sqlx](#transactions-in-sqlx)
 
 # Preface
 
@@ -1579,3 +1583,23 @@ down all tasks spawned on it are dropped.
   2. retrieve the subscriber id associated with the token (if one exists)
   3. change the subscriber status to `confirmed`
  
+## Database Transactions
+
+### All Or Nothing
+* `POST /subscriptions` handler has grown in complexity - we are now performing two `INSERT` queries against our Postgres database: one to store the details of the new subscriber, one to store the newly generated subscription token.
+* If our application crashes between those 2 queries, our database could be left in a bad state.
+* Relational databases (and a few others) provide a mechanism to mitigate this issue: **transactions**.
+* Transactions are a way to group together related operations in a single **unit of work**.
+* The database guarantees that all operations within a transaction will succeed or fail together.
+
+### Transactions In Postgres
+* `BEGIN` is used to start a transaction and `COMMIT` is used to mark its end.
+* If any of the queries within a transaction fails the database **rolls back**: all changes performed by previous queries are reverted, the operation is aborted.
+* Transactions also hide the effect of uncommitted changes from other queries that might be running, concurrently, against the same tables.
+
+### Transactions In Sqlx
+* By calling `begin` on our pool we acquire a connection from the pool and kick off a transaction.
+* `begin`, if successful, returns a `Transaction` struct.
+* A mutable reference to a `Transaction` dereferences to `sqlx`’s `Connection`, so it can be used to run queries. All queries run using a `Transaction` as executor become part of the transaction.
+* We can also rollback a transaction manually.
+* If `commit` or `rollback` have not been called before the `Transaction` object goes out of scope (i.e. `Drop` is invoked), a `rollback` command is queued to be executed as soon as an opportunity arises.

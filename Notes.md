@@ -11,7 +11,7 @@
   - [Inner Development Loop](#inner-development-loop)
     - [Faster Linking](#faster-linking)
     - [cargo-watch](#cargo-watch)
-  - [Continous Integration](#continous-integration)
+  - [Continuous Integration](#continuous-integration)
     - [CI Steps](#ci-steps)
       - [Tests](#tests)
       - [Code Coverage](#code-coverage)
@@ -290,7 +290,7 @@ The Language Server Protocol makes it easy to leverage `rust-analyzer` in many d
  - Run the application
 
 ### Faster Linking
-* A sizeable chunk of time is spent in the **linking** phase when are doing incremental builds.
+* A sizable chunk of time is spent in the **linking** phase when are doing incremental builds.
 * The default linker does a good job, but there is a faster one by the LLVM project: `lld`.
 * See `.cargo/config.toml` to see how to install and add configuration to use `lld`.
 
@@ -299,7 +299,7 @@ The Language Server Protocol makes it easy to leverage `rust-analyzer` in many d
 * `cargo watch -x check` monitors your source code to trigger commands like `cargo check` (in this case) every time a file changes.
 * We can also do `cargo watch -x check -x test -x run` to chain 3 commands together that `cargo check`, `cargo test`, and `cargo run` each time our code changes.
 
-## Continous Integration
+## Continuous Integration
 * In trunk-based development we should be able to deploy our `main` branch at any point in time.
 * Every member of the team can branch off from `main`, develop a small feature or fix a bug, merge back into `main` and release to our users.
 * CI also provides a tighter feedback loop.
@@ -474,7 +474,7 @@ The Language Server Protocol makes it easy to leverage `rust-analyzer` in many d
 * We are going to use the `tests` folder for our API integration tests - it is more clearly separated and it is easier to manage test helpers as sub-modules of an external test binary.
 
 ### Changing Our Project Structure For Easier Testing
-* To be able to share our code so we can test it, we need to convert it from a binary into a library & a binary where the binary will just be entrypoint with a very slim `main` function.
+* To be able to share our code so we can test it, we need to convert it from a binary into a library & a binary where the binary will just be entry-point with a very slim `main` function.
 * We can do this by
   * specifying `[lib]` and `[[bin]]` in our Cargo.toml
   * moving code from "src/main.rs" to "src/lib.rs" renaming `main` to `run` to avoid conflicts.
@@ -523,9 +523,9 @@ down all tasks spawned on it are dropped.
 * If we get both a valid name and email, we should return `200 OK` otherwise `400 BAD REQUEST`.
 
 ### Capturing Our Requirements As Tests
-* `subscribe_returns_a_400_when_data_is_missing` is an example of *table-driven test* also known as *parametrised test*.
+* `subscribe_returns_a_400_when_data_is_missing` is an example of *table-driven test* also known as *parametrized test*.
   * Instead of duplicating test logic several times we can simply run the same assertion against a collection of known invalid bodies that we expect to fail in the same way.
-  * With "roll-you-own" parametrised tests: as soon as one test case fails, the execution stops and we do not know the outcome for the following test cases.
+  * With "roll-you-own" parametrized tests: as soon as one test case fails, the execution stops and we do not know the outcome for the following test cases.
 
 ### Parsing Form Data From A POST Request
 * We can add a new `/subscriptions` route.
@@ -645,7 +645,7 @@ down all tasks spawned on it are dropped.
 ##### Adding A Migration
 * Running `sqlx migrate add create_subscriptions_table` creates a `migration` directory in our project to store all our migrations.
 * We add the SQL code for our first migration to create the `subscriptions` table in the file in that directory named `{timestamp}_create_subscriptions_table.sql`.
-* Database constraints are useful as a last line of defence from application bugs but they come at a cost - the database has to ensure all checks pass before writing new data into the table.
+* Database constraints are useful as a last line of defense from application bugs but they come at a cost - the database has to ensure all checks pass before writing new data into the table.
 * Therefore constraints impact our write-throughput.
 * We can then migrations by `sqlx migrate run`.
 * Looking at the database using a Postgres GUI, we can see a `subscriptions` table alongside `_sqlx_migrations table` where `sqlx` keeps track of what migrations have been run against our database - it should contain a single row now for our first migration.
@@ -996,7 +996,7 @@ down all tasks spawned on it are dropped.
 * We will store all these configurations in a top-level configurations directory.
 
 ### Optimizing Our Docker Image
-* There are two optimisations we can make to our Dockerfile to make our life easier going forward:
+* There are two optimizations we can make to our Dockerfile to make our life easier going forward:
   1. smaller image size for faster usage
   2. Docker layer caching for faster builds
 
@@ -1018,7 +1018,7 @@ down all tasks spawned on it are dropped.
 * Each `RUN`, `COPY` and `ADD` instruction in a Dockerfile creates a layer: a diff between the previous state (the layer above) and the current state after having executed the specified command.
 * Layers are cached: if the starting point of an operation has not changed (e.g. the base image) and the command itself has not changed (e.g. the checksum of the files copied by `COPY`) Docker does not perform any computation and just retrieves a copy of the result from the local cache.
 * Docker layer caching is fast and can be leveraged to massively speed up Docker builds.
-  * The trick is optimising the order of operations in your Dockerfile: anything that refers to files that are changing often (e.g. source code) should appear as late as possible, therefore maximizing the likelihood of the previous step being unchanged and allowing Docker to retrieve the result from the cache.
+  * The trick is optimizing the order of operations in your Dockerfile: anything that refers to files that are changing often (e.g. source code) should appear as late as possible, therefore maximizing the likelihood of the previous step being unchanged and allowing Docker to retrieve the result from the cache.
   * The expensive step is usually compilation.
   * Most programming languages follow the same playbook: you `COPY` a lock-file of some kind first, build your dependencies, `COPY` over the rest of your source code and then build your project.
   * This guarantees that most of the work is cached as long as your dependency tree does not change between one build and the next.
@@ -1031,7 +1031,7 @@ down all tasks spawned on it are dropped.
 ## Deploy To DigitalOcean
 
 ### Setup
-* We setup our accoung and install `dotcl`.
+* We setup our account and install `dotcl`.
 
 ### App Specification
 * Digital Ocean’s App Platform uses a declarative configuration file called App Spec to let us specify what our application deployment should look like.
@@ -1063,7 +1063,7 @@ down all tasks spawned on it are dropped.
 ### One Last Push
 * We apply the new spec by `doctl apps update YOUR-APP-ID --spec=spec.yaml`
 * We also need to migrate the database `DATABASE_URL=DIGITAL-OCEAN-DB-CONNECTION-STRING sqlx migrate run` after turning off "Trusted Sources" in the database on Digital Oceans.
-  * The `DIGITAL-OCEAN-DB-CONNECTION-STRING` is in the following format: `postgres://<username>:<password>@<host>:<port>/<database_name>` and can be retreived from Digital Ocean's database settings -> Connection Details.
+  * The `DIGITAL-OCEAN-DB-CONNECTION-STRING` is in the following format: `postgres://<username>:<password>@<host>:<port>/<database_name>` and can be retrieved from Digital Ocean's database settings -> Connection Details.
 * We can now make `/POST` requests:
   * ```
     curl --request POST \
@@ -1090,11 +1090,11 @@ down all tasks spawned on it are dropped.
   * Reject names containing troublesome characters. `/()"<>\{}` as they are not common in names. Forbidding them raises the complexity bar for SQL injection and phishing attempts.
 
 ## First Implementation
-* We could add a function `is_valid_name()` that we call before we call `insert_subscirber`.
+* We could add a function `is_valid_name()` that we call before we call `insert_subscriber`.
 * That function would trim any whitespace in the name, ensure it isn't too long, isn't non-empty, and doesn't contain forbidden characters, but such an implementation would be a false sense of security.
 
 ## Validation Is A Leaky Cauldron
-* Just by looking at the type `FormData`, `insert_subscriber` cannot assume that `form.name` will be non-empty. We would have to shift from a *local* (`insert_subscriber` function) approach to a *global* approach (the entire codebase) to ensure something ensured the name is vaild.
+* Just by looking at the type `FormData`, `insert_subscriber` cannot assume that `form.name` will be non-empty. We would have to shift from a *local* (`insert_subscriber` function) approach to a *global* approach (the entire codebase) to ensure something ensured the name is valid.
 * Every other function that uses `form.name` would need to do the same validation (and it could be missed during refactoring etc) and such implementations could result in input checks in multiple places -- also bad. This approach does not scale.
 * We need is a parsing function - a routine that accepts unstructured input and, if a set of conditions holds, returns us a more structured output, an output that structurally guarantees that the invariants we care about hold from that point onwards. We can do this using **types**!
 
@@ -1126,7 +1126,7 @@ down all tasks spawned on it are dropped.
 * `claims` needs our type to implement the `Debug` trait to provide those nice error messages. So we will add a `#[derive(Debug)]` attribute on top of `SubscriberName`
 
 ## Handling A `Result`
-* Instead of panicing when an invalid name is passed in, we want to return a "400 Bad Request".
+* Instead of panicking when an invalid name is passed in, we want to return a "400 Bad Request".
 
 ### The `?` Operator
 * `?` is syntactic sugar to reduce the amount of visual noise when you are working with fallible functions and you want to “bubble up” failures.
@@ -1154,7 +1154,7 @@ down all tasks spawned on it are dropped.
 
 ### How To Generate Random Test Data With `fake`
 * `fake` provides generation logic for both primitive data types (integers, floats, strings) and higher-level objects (IP addresses, country codes, email, etc).
-* But we would have to run our test suite mulitple times to make sure we catch every edge case, or we could have a `for` loop to test.
+* But we would have to run our test suite multiple times to make sure we catch every edge case, or we could have a `for` loop to test.
 
 ### Getting Started with `quickcheck`
 * There are test crates available for property-based testing, 2 of them are: `quickcheck` and `proptest`, but we will use `quickcheck`.
@@ -1186,10 +1186,10 @@ down all tasks spawned on it are dropped.
 # Ch 7 - Reject Invalid Subscribers #2
 
 ## Confirmation Emails
-* Now that our remails are syntactically correct, we need to make sure they exist and reachable.
+* Now that our emails are syntactically correct, we need to make sure they exist and reachable.
 
 ### Subscriber Consent
-* We will confirm emails by sending confirmation emails and this will also tell us about the subsriber's explicit consent before we send our first newsletter.
+* We will confirm emails by sending confirmation emails and this will also tell us about the subscriber's explicit consent before we send our first newsletter.
 
 ### The Confirmation User Journey
 * The user will receive an email with a confirmation link.
@@ -1236,9 +1236,9 @@ down all tasks spawned on it are dropped.
 
 #### Connection Pooling
 * Before executing an HTTP request against an API hosted on a remote server we need to establish a connection.
-* Connecting is an expensive operation, especially if using HTTPS: creating a brand-new connection every time we want to makek a request can impact the performance of our application and might lead to *socket exhaustion* under load.
+* Connecting is an expensive operation, especially if using HTTPS: creating a brand-new connection every time we want to make a request can impact the performance of our application and might lead to *socket exhaustion* under load.
 * To avoiding re-establishing a connection from scratch, most HTTP clients offer connection pooling: after the first request to a remote server has been completed, they will keep the connection open (for a certain amount of time) and re-use it if we need to send another request to the same server.
-* `reqwest` does the same: every time a `Client` instance is created `reqwest` initialises a connection pool under the hood.
+* `reqwest` does the same: every time a `Client` instance is created `reqwest` initializes a connection pool under the hood.
 * To use this connection pool we need to reuse the same `Client` across multiple requests.
 * **Note**: `Client::clone` does not create a new connection pool - we just clone a pointer to the underlying pool.
 
@@ -1295,7 +1295,7 @@ curl "https://api.postmarkapp.com/email" \
 * Expectations are verified when `MockServer` goes out of scope - at the end of our test function.
 * Before shutting down, MockServer will iterate over all the mounted mocks and check if their expectations have been verified.
 * If the verification step fails, it will trigger a panic (and fail the test).
-* `expect(1)` tells the mock server that it shoudl recieve exactly one request that matches this request.
+* `expect(1)` tells the mock server that it should receive exactly one request that matches this request.
 
 ### First Sketch Of `EmailClient::send_email`
 * To send an email, we need:
@@ -1355,7 +1355,7 @@ curl "https://api.postmarkapp.com/email" \
 ## Skeleton And Principles For A Maintainable Test Suite
 
 ### Why Do We Write Tests?
-* Tests mitigate risks, catch bugs in CI, and acr as documentation.
+* Tests mitigate risks, catch bugs in CI, and act as documentation.
 
 ### Why Don't We Write Tests?
 * Good tests build technical leverage, but writing tests takes time. 
@@ -1430,7 +1430,7 @@ curl "https://api.postmarkapp.com/email" \
 ### Reliability
 * There is no silver bullet to build a highly available solution: it requires work from the application layer all the way down to the infrastructure layer.
 * One thing is certain, though: if you want to operate a highly available service, you should master **zero downtime deployments** - users should be able to use the service before, during and after the rollout of a new version of the application to production.
-* This is even more important if you are practising continuous deployment: you cannot release multiple times a day if every release triggers a small outage.
+* This is even more important if you are practicing continuous deployment: you cannot release multiple times a day if every release triggers a small outage.
 
 ### Deployment Strategies
 
@@ -1492,7 +1492,7 @@ curl "https://api.postmarkapp.com/email" \
 * Possible scenarios showing we cannot possibly deploy confirmation emails all at once without incurring downtime:
   * We could first migrate the database and then deploy the new version.
     * This implies that the current version is running against the migrated database for some time: our current implementation of `POST /subscriptions` does not know about `status` and it tries to insert new rows into  `subscriptions` without populating it.
-    * Given that `status` is a madatory field, all inserts would fail - we would not be able to accept new subscribers until the new version of the application is deployed.
+    * Given that `status` is a mandatory field, all inserts would fail - we would not be able to accept new subscribers until the new version of the application is deployed.
   * We could first deploy the new version and then migrate the database.
     * We get the opposite scenario.
     * When `POST /subscriptions` is called, it tries to insert a row into `subscriptions` with a `status` field that does not exist - all inserts fail and we cannot accept new subscribers until the database is migrated.
@@ -1501,7 +1501,7 @@ curl "https://api.postmarkapp.com/email" \
 * A big bang release won’t work - we need to get there in multiple, smaller steps. We'll keep the application code stable and migrate the database.
 
 ### A New Mandatory Column
-* We look ath the `status` column
+* We look at the `status` column
 
 #### Step 1: Add As Optional
 1. We generate and run a new migration script to add `status` as an optional field to our table.
@@ -1514,7 +1514,7 @@ curl "https://api.postmarkapp.com/email" \
 #### Step 3: Backfill And Mark As `NOT NULL`
 * The latest version of the application ensures that status is populated for all new subscribers.
 * To mark `status` as `NOT NULL` we just need to backfill the value for historical records: we’ll then be free to alter the column.
-1. We generate a new migration sciprt to mark `status` as `NOT NULL` and backfill `status` for historical entries with `confirmed`.
+1. We generate a new migration script to mark `status` as `NOT NULL` and backfill `status` for historical entries with `confirmed`.
 2. Migrate our local database, run tests, and deploy to production database.
 
 ### A New Table
@@ -1563,7 +1563,7 @@ curl "https://api.postmarkapp.com/email" \
 * We want to build up the skeleton of the endpoint - we need to register the handler against the path in src/startup.rs and reject incoming requests without the required query parameter, `subscription_token`.
 
 #### Red Test
-* We will add a new module for tests relating to the confirmaiton callback.
+* We will add a new module for tests relating to the confirmation callback.
 
 #### Green Test
 * We want to make sure that there is a `subscription_token` query parameter: we can use `actix-web`'s extractor: `Query`.

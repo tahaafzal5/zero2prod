@@ -1258,6 +1258,23 @@ down all tasks spawned on it are dropped.
 * The main purpose of `EmailClient::send_email` is to perform an HTTP call: how do we know if it happened? How do we check that the body and the headers were populated as we expected?
 * We need to intercept that HTTP request so we will spin up a mock server using `wiremock`.
 
+* We can send emails from the command line using curl like so:
+```
+curl "https://api.postmarkapp.com/email" \
+  -X POST \
+  -H "Accept: application/json" \
+  -H "Content-Type: application/json" \
+  -H "X-Postmark-Server-Token: <token>" \
+  -d '{
+        "From": "test@example.com",
+        "To": "test@example.com",
+        "Subject": "Hello from Postmark",
+        "HtmlBody": "<strong>Hello</strong> dear Postmark user.",
+        "MessageStream": "outbound"
+      }'
+```
+* Note: the email address in the "From" field has to be one of the approved signatures in Postmark to send the email.
+
 #### `wiremock::MockServer`
 * `MockServer::start` asks the operating system for a random available port and spins up the server on a background thread, ready to listen for incoming requests.
 * We can then use the `uri` method to get the `base_url` for our `EmailClient`.

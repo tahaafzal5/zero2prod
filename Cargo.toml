@@ -63,3 +63,4 @@ linkify = "0.9"
 
 [lints.clippy]
 expect_fun_call = "allow"
+collapsible_else_if = "allow"

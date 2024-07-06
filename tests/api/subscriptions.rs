@@ -6,6 +6,7 @@ use crate::helpers::spawn_app;
 
 #[tokio::test]
 async fn subscribe_returns_a_200_for_valid_form_data() {
+    // Arrange
     let app = spawn_app().await;
 
     Mock::given(path(email_route()))
@@ -16,13 +17,17 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
         .await;
 
     let body = format!("name=Taha%20Afzal&email=tahaafzal5%40hotmail.com");
+
+    // Act
     let response = app.send_subscription_request(body.into()).await;
 
+    // Assert
     assert_eq!(response.status().as_u16(), 200);
 }
 
 #[tokio::test]
 async fn subscribe_persists_the_new_subscriber() {
+    // Arrange
     let app = spawn_app().await;
 
     Mock::given(path(email_route()))
@@ -33,6 +38,8 @@ async fn subscribe_persists_the_new_subscriber() {
         .await;
 
     let body = format!("name=Taha%20Afzal&email=tahaafzal5%40hotmail.com");
+
+    // Act
     app.send_subscription_request(body.into()).await;
 
     let saved = sqlx::query!("SELECT email, name, status FROM subscriptions")
@@ -40,6 +47,7 @@ async fn subscribe_persists_the_new_subscriber() {
         .await
         .expect("Failed to fetch saved subscription");
 
+    // Assert
     assert_eq!(saved.email, "tahaafzal5@hotmail.com");
     assert_eq!(saved.name, "Taha Afzal");
     assert_eq!(saved.status, "pending_confirmation");
@@ -47,6 +55,7 @@ async fn subscribe_persists_the_new_subscriber() {
 
 #[tokio::test]
 async fn subscribe_returns_a_400_when_data_is_missing() {
+    // Arrange
     let app = spawn_app().await;
 
     let test_cases = vec![
@@ -56,8 +65,10 @@ async fn subscribe_returns_a_400_when_data_is_missing() {
     ];
 
     for (invalid_body, error_message) in test_cases {
+        // Act
         let response = app.send_subscription_request(invalid_body.into()).await;
 
+        // Assert
         assert!(response.status().is_client_error());
         assert_eq!(
             400,
@@ -70,6 +81,7 @@ async fn subscribe_returns_a_400_when_data_is_missing() {
 
 #[tokio::test]
 async fn subscribe_returns_a_400_when_fields_are_present_but_invalid() {
+    // Arrange
     let app = spawn_app().await;
 
     let test_cases = vec![
@@ -79,8 +91,10 @@ async fn subscribe_returns_a_400_when_fields_are_present_but_invalid() {
     ];
 
     for (body, description) in test_cases {
+        // Act
         let response = app.send_subscription_request(body.into()).await;
 
+        // Assert
         assert_eq!(
             400,
             response.status().as_u16(),
@@ -92,6 +106,7 @@ async fn subscribe_returns_a_400_when_fields_are_present_but_invalid() {
 
 #[tokio::test]
 async fn subscribe_sends_a_confirmation_email_for_valid_data() {
+    // Arrange
     let app = spawn_app().await;
     let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
 
@@ -102,13 +117,16 @@ async fn subscribe_sends_a_confirmation_email_for_valid_data() {
         .mount(&app.email_server)
         .await;
 
+    // Act
     app.send_subscription_request(body.into()).await;
 
+    // Assert
     // Mock asserts on drop
 }
 
 #[tokio::test]
 async fn subscribe_sends_a_confirmation_email_with_a_link() {
+    // Arrange
     let app = spawn_app().await;
     let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
 
@@ -118,11 +136,13 @@ async fn subscribe_sends_a_confirmation_email_with_a_link() {
         .mount(&app.email_server)
         .await;
 
+    // Act
     app.send_subscription_request(body.into()).await;
 
     let email_request = &app.email_server.received_requests().await.unwrap()[0];
     let confirmation_links = app.get_confirmation_links(&email_request);
 
+    // Assert
     // Both links should be identical
     assert_eq!(confirmation_links.html, confirmation_links.plain_text);
 }

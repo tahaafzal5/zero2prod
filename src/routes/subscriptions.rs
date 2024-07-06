@@ -4,7 +4,10 @@ use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use sqlx::{Executor, PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
-use crate::{domain::NewSubscriber, email_client::EmailClient};
+use crate::{
+    domain::{NewSubscriber, SubscriberEmail},
+    email_client::EmailClient,
+};
 
 #[derive(serde::Deserialize)]
 pub struct FormData {
@@ -26,46 +29,96 @@ pub async fn subscribe(
     email_client: web::Data<EmailClient>,
     base_url: web::Data<String>,
 ) -> HttpResponse {
-    let new_subscriber = match form.0.try_into() {
+    let new_subscriber: NewSubscriber = match form.0.try_into() {
         Ok(subscriber) => subscriber,
         Err(_) => return HttpResponse::BadRequest().finish(),
     };
 
-    let mut transaction = match connection_pool.begin().await {
-        Ok(transaction) => transaction,
-        Err(_) => return HttpResponse::InternalServerError().finish(),
-    };
+    let subscription_token =
+        match get_subscription_token_if_subscriber_exists(&connection_pool, &new_subscriber.email)
+            .await
+        {
+            Ok(Some(token)) => Some(token),
+            Ok(None) => None,
+            Err(_) => None,
+        };
 
-    let subsriber_id = match insert_subscriber(&new_subscriber, &mut transaction).await {
-        Ok(subscriber_id) => subscriber_id,
-        Err(_) => return HttpResponse::InternalServerError().finish(),
-    };
+    if subscription_token.is_none() {
+        let mut transaction = match connection_pool.begin().await {
+            Ok(transaction) => transaction,
+            Err(_) => return HttpResponse::InternalServerError().finish(),
+        };
 
-    let subscription_token = generate_subscription_token();
-    if store_subscription_token(&mut transaction, &subsriber_id, &subscription_token)
+        let subsriber_id = match insert_subscriber(&new_subscriber, &mut transaction).await {
+            Ok(subscriber_id) => subscriber_id,
+            Err(_) => return HttpResponse::InternalServerError().finish(),
+        };
+
+        let subscription_token = generate_subscription_token();
+        if store_subscription_token(&mut transaction, &subsriber_id, &subscription_token)
+            .await
+            .is_err()
+        {
+            return HttpResponse::InternalServerError().finish();
+        }
+
+        if transaction.commit().await.is_err() {
+            return HttpResponse::InternalServerError().finish();
+        }
+
+        if send_confirmation_email(
+            &email_client,
+            &new_subscriber,
+            &base_url,
+            &subscription_token,
+        )
         .await
         .is_err()
-    {
-        return HttpResponse::InternalServerError().finish();
-    }
-
-    if transaction.commit().await.is_err() {
-        return HttpResponse::InternalServerError().finish();
-    }
-
-    if send_confirmation_email(
-        &email_client,
-        &new_subscriber,
-        &base_url,
-        &subscription_token,
-    )
-    .await
-    .is_err()
-    {
-        return HttpResponse::InternalServerError().finish();
+        {
+            return HttpResponse::InternalServerError().finish();
+        }
+    } else {
+        if send_confirmation_email(
+            &email_client,
+            &new_subscriber,
+            &base_url,
+            &subscription_token.unwrap(),
+        )
+        .await
+        .is_err()
+        {
+            return HttpResponse::InternalServerError().finish();
+        }
     }
 
     return HttpResponse::Ok().finish();
+}
+
+#[tracing::instrument(
+    name = "Getting subscription token if subscriber exists",
+    skip(connection_pool, email)
+)]
+async fn get_subscription_token_if_subscriber_exists(
+    connection_pool: &web::Data<PgPool>,
+    email: &SubscriberEmail,
+) -> Result<Option<String>, sqlx::Error> {
+    let result = sqlx::query!(
+        "SELECT subscription_token \
+        FROM subscription_tokens \
+        INNER JOIN subscriptions \
+        ON subscription_tokens.subscriber_id = subscriptions.id \
+        WHERE email=$1 \
+        AND status='pending_confirmation'",
+        email.as_ref()
+    )
+    .fetch_optional(connection_pool.get_ref())
+    .await
+    .map_err(|e| {
+        tracing::error!("Failed to execute query: {:?}", e);
+        e
+    })?;
+
+    Ok(result.map(|r| r.subscription_token))
 }
 
 #[tracing::instrument(

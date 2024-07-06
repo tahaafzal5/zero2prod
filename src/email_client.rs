@@ -53,19 +53,7 @@ impl EmailClient {
             html_body,
         };
 
-        dbg!("http_client: ", &self.http_client);
-        println!("url: {}", &url);
-        println!(
-            "authorization_token: {}",
-            &self.authorization_token.expose_secret()
-        );
-        println!("request_body.from: {}", &request_body.from);
-        println!("request_body.to: {}", &request_body.to);
-        println!("request_body.subject: {}", &request_body.subject);
-        println!("request_body.text_body: {}", &request_body.text_body);
-        println!("request_body.html_body: {}", &request_body.html_body);
-
-        match self
+        let _ = self
             .http_client
             .post(&url)
             .header(
@@ -75,14 +63,7 @@ impl EmailClient {
             .json(&request_body)
             .send()
             .await?
-            .error_for_status()
-        {
-            Ok(_) => (),
-            Err(error) => {
-                println!("Error in send_email: {}", &error);
-                return Err(error);
-            }
-        }
+            .error_for_status()?;
 
         Ok(())
     }

@@ -5,16 +5,20 @@ use zero2prod::routes::health_check_route;
 // It also spares us from having to specify the `#[test]` attribute.
 #[tokio::test]
 async fn health_check_works() {
+    // Arrange
     let app = spawn_app().await;
     let client = reqwest::Client::new();
 
     let request = format!("{}{}", app.address, health_check_route());
+
+    // Act
     let response = client
         .get(request)
         .send()
         .await
         .expect("Failed to execute GET request");
 
+    // Assert
     assert!(response.status().is_success());
     assert_eq!(Some(0), response.content_length());
 }

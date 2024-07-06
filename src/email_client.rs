@@ -129,6 +129,7 @@ mod tests {
 
     #[tokio::test]
     async fn send_email_send_the_expected_request() {
+        // Arrange
         let mock_server = MockServer::start().await;
         let email_client = email_client(mock_server.uri());
 
@@ -146,6 +147,7 @@ mod tests {
         let subject = subject();
         let body = body();
 
+        // Act
         let _ = email_client
             .send_email(&subscriber_email, &subject, &body, &body)
             .await;
@@ -157,6 +159,7 @@ mod tests {
 
     #[tokio::test]
     async fn send_email_succeeds_if_the_server_returns_200() {
+        // Arrange
         let mock_server = MockServer::start().await;
         let email_client = email_client(mock_server.uri());
 
@@ -176,15 +179,18 @@ mod tests {
         let subject = subject();
         let body = body();
 
+        // Act
         let result = email_client
             .send_email(&recipient, &subject, &body, &body)
             .await;
 
+        // Assert
         assert_ok!(result);
     }
 
     #[tokio::test]
     async fn send_email_fails_if_the_server_returns_500() {
+        // Arrange
         let mock_server = MockServer::start().await;
         let email_client = email_client(mock_server.uri());
 
@@ -198,15 +204,18 @@ mod tests {
             .mount(&mock_server)
             .await;
 
+        // Act
         let result = email_client
             .send_email(&recipient, &subject, &body, &body)
             .await;
 
+        // Assert
         assert_err!(result);
     }
 
     #[tokio::test]
     async fn send_email_times_out_if_the_server_takes_too_long() {
+        // Arrange
         let mock_server = MockServer::start().await;
         let email_client = email_client(mock_server.uri());
 
@@ -222,10 +231,12 @@ mod tests {
             .mount(&mock_server)
             .await;
 
+        // Act
         let result = email_client
             .send_email(&recipient, &subject, &body, &body)
             .await;
 
+        // Assert
         assert_err!(result);
     }
 }

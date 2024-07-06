@@ -5,17 +5,21 @@ use crate::helpers::spawn_app;
 
 #[tokio::test]
 async fn confirmations_without_token_are_rejected_with_a_400() {
+    // Arrange
     let app = spawn_app().await;
 
+    // Act
     let response = reqwest::get(&format!("{}{}", app.address, subscriptions_confirm_route()))
         .await
         .unwrap();
 
+    // Assert
     assert_eq!(response.status().as_u16(), 400);
 }
 
 #[tokio::test]
 async fn the_link_returned_by_subscribe_returns_a_200_if_called() {
+    // Arrange
     let app = spawn_app().await;
 
     let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
@@ -26,6 +30,7 @@ async fn the_link_returned_by_subscribe_returns_a_200_if_called() {
         .mount(&app.email_server)
         .await;
 
+    // Act
     app.send_subscription_request(body.into()).await;
     let email_request = &app.email_server.received_requests().await.unwrap()[0];
 
@@ -33,11 +38,13 @@ async fn the_link_returned_by_subscribe_returns_a_200_if_called() {
 
     let response = reqwest::get(confirmation_links.html).await.unwrap();
 
+    // Assert
     assert_eq!(response.status().as_u16(), 200);
 }
 
 #[tokio::test]
 async fn clicking_on_the_confirmation_link_confirms_a_subscriber() {
+    // Arrange
     let app = spawn_app().await;
     let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
 
@@ -47,6 +54,7 @@ async fn clicking_on_the_confirmation_link_confirms_a_subscriber() {
         .mount(&app.email_server)
         .await;
 
+    // Act
     app.send_subscription_request(body.into()).await;
     let email_request = &app.email_server.received_requests().await.unwrap()[0];
 
@@ -64,5 +72,6 @@ async fn clicking_on_the_confirmation_link_confirms_a_subscriber() {
         .await
         .expect("Failed to fetch saved subscription status");
 
+    // Assert
     assert_eq!(saved.status, "confirmed");
 }

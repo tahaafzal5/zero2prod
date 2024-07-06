@@ -43,7 +43,7 @@ impl EmailClient {
         html_body: &str,
         text_body: &str,
     ) -> Result<(), reqwest::Error> {
-        let url = format!("{}/email", self.base_url);
+        let url = format!("{}{}", self.base_url, email_route());
 
         let request_body = SendEmailRequest {
             from: self.sender_email.as_ref(),
@@ -80,7 +80,7 @@ pub fn subscriptions_confirm_route() -> String {
 #[cfg(test)]
 mod tests {
     use crate::domain::SubscriberEmail;
-    use crate::email_client::EmailClient;
+    use crate::email_client::{email_route, EmailClient};
     use claims::{assert_err, assert_ok};
     use fake::faker::lorem::en::{Paragraph, Sentence};
     use fake::{faker::internet::en::SafeEmail, Fake, Faker};
@@ -134,7 +134,7 @@ mod tests {
 
         Mock::given(header_exists("X-Postmark-Server-Token"))
             .and(header("Content-Type", "application/json"))
-            .and(path("/email"))
+            .and(path(email_route()))
             .and(method("POST"))
             .and(SendEmailBodyMatcher)
             .respond_with(ResponseTemplate::new(200))

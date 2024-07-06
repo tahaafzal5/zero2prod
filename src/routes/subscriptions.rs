@@ -53,19 +53,20 @@ pub async fn subscribe(
         return HttpResponse::InternalServerError().finish();
     }
 
-    if send_confirmation_email(
+    match send_confirmation_email(
         &email_client,
         &new_subscriber,
         &base_url,
         &subscription_token,
     )
     .await
-    .is_err()
     {
-        return HttpResponse::InternalServerError().finish();
-    }
-
-    return HttpResponse::Ok().finish();
+        Ok(_) => return HttpResponse::Ok().finish(),
+        Err(error) => {
+            println!("send_confirmation_email returned an error: {}", error);
+            return HttpResponse::InternalServerError().finish();
+        }
+    };
 }
 
 #[tracing::instrument(

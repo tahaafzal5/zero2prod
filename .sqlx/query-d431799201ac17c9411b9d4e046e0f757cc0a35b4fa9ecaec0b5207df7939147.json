@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT subscription_token FROM subscription_tokens INNER JOIN subscriptions ON subscription_tokens.subscriber_id = subscriptions.id WHERE email=$1 AND status='pending_confirmation'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "subscription_token",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "d431799201ac17c9411b9d4e046e0f757cc0a35b4fa9ecaec0b5207df7939147"
+}

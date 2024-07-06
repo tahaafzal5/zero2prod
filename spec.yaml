@@ -17,7 +17,7 @@ services:
       - path: /
     envs:
       # Application
-      - key: APP_APPLICAITON__BASE_URL
+      - key: APP_APPLICATION__BASE_URL
         scope: RUN_TIME
         value: ${APP_URL}
         

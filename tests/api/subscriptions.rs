@@ -196,3 +196,50 @@ async fn subscribe_twice_when_status_is_pending_confirmation_sends_another_email
         second_confirmation_links.plain_text
     );
 }
+
+#[tokio::test]
+async fn subscribing_twice_when_status_is_already_confirmed_returns_a_500() {
+    // First Arrange
+    let app = spawn_app().await;
+    let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
+
+    Mock::given(path(email_route()))
+        .and(method("POST"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&app.email_server)
+        .await;
+
+    // First Act
+    app.send_subscription_request(body.into()).await;
+    let email_request = &app.email_server.received_requests().await.unwrap()[0];
+
+    let confirmation_links = app.get_confirmation_links(&email_request);
+
+    // "Click" the confirmation link in the email
+    reqwest::get(confirmation_links.html)
+        .await
+        .unwrap()
+        .error_for_status()
+        .unwrap();
+
+    let saved = sqlx::query!("SELECT status FROM subscriptions")
+        .fetch_one(&app.connection_pool)
+        .await
+        .expect("Failed to fetch saved subscription status");
+
+    // First Assert
+    assert_eq!(saved.status, "confirmed");
+
+    // Second Arrange
+    Mock::given(path(email_route()))
+        .and(method("POST"))
+        .respond_with(ResponseTemplate::new(500))
+        .mount(&app.email_server)
+        .await;
+
+    // Second Act
+    let result = app.send_subscription_request(body.into()).await;
+
+    // Second Assert
+    assert_eq!(result.status().as_u16(), 500);
+}

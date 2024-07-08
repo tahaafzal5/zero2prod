@@ -235,6 +235,15 @@
     - [All Or Nothing](#all-or-nothing)
     - [Transactions In Postgres](#transactions-in-postgres)
     - [Transactions In Sqlx](#transactions-in-sqlx)
+- [Ch 8 - Error Handling](#ch-8---error-handling)
+  - [What Is The Purpose Of Errors?](#what-is-the-purpose-of-errors)
+    - [Internal Errors](#internal-errors)
+      - [Enable The Caller To React](#enable-the-caller-to-react)
+      - [Help An Operator To Troubleshoot](#help-an-operator-to-troubleshoot)
+    - [Errors At The Edge](#errors-at-the-edge)
+      - [Help A User To Troubleshoot](#help-a-user-to-troubleshoot)
+  - [Error Reporting For Operators](#error-reporting-for-operators)
+    - [Keeping Track Of The Error Root Cause](#keeping-track-of-the-error-root-cause)
 
 # Preface
 
@@ -1620,3 +1629,68 @@ curl "https://api.postmarkapp.com/email" \
 * A mutable reference to a `Transaction` dereferences to `sqlx`’s `Connection`, so it can be used to run queries. All queries run using a `Transaction` as executor become part of the transaction.
 * We can also rollback a transaction manually.
 * If `commit` or `rollback` have not been called before the `Transaction` object goes out of scope (i.e. `Drop` is invoked), a `rollback` command is queued to be executed as soon as an opportunity arises.
+
+# Ch 8 - Error Handling
+
+## What Is The Purpose Of Errors?
+* `execute` to run sql queries is a fallible operation: issues with talking to the database, violating uniqueness, etc.
+
+### Internal Errors
+#### Enable The Caller To React
+* The caller of fallible functions most likely wants to be informed if a failure occurs -** they need to react accordingly**, e.g. retry the query or propagate the failure upstream using `?`.
+* When the return type is a `Result<Success, Error>` (e.g. in `execute`), the compiler forces the caller to handle both scenarios - success and failure.
+* If our only goal was to communicate to the caller that an error happened, we could use a simpler definition for `Result`: `ResultSignal<Success>`:
+  * ```Rust
+      pub enum ResultSignal<Success> {
+        Ok(Success)
+        Err
+      }
+    ```
+* There would be no need for a generic `Error` type - we could just check that execute returned the `Err` variant:
+  * ```Rust
+      let outcome = transaction.execute(query).await;
+      if outcome == ResultSignal::Err {
+        // Do something if it failed
+      }
+    ```
+* This works if there is only one failure mode. Truth is, operations can fail in multiple ways and we might want to react differently depending on what happened.
+  * `sqlx::Error` is implemented as an enum to allow users to match on the returned error and behave differently depending on the underlying failure mode.
+
+#### Help An Operator To Troubleshoot
+* Even if an operation has a single failure mode, while `Err(())` might have been enough for the caller to determine what to do - e.g. return a 500 Internal Server Error to the user, we errors to carry enough context about the failure to produce a report with enough details for an operator (e.g. the developer) to troubleshoot the issue.
+
+### Errors At The Edge
+#### Help A User To Troubleshoot
+* For internal errors, we don't necessarily need to tell the user why an operation failed, but conveying that information to them is helpful in other cases.
+* `SubscriberEmail`'s `parse` returns a semi-helpful message but it is not displayed to the user since `subscribe()` just returns a `BadRequest`. This is a poor error, since the user can't see why it was a `BadRequest` or how can they adapt their behavior.
+
+## Error Reporting For Operators
+* To see if we are doing a good job reporting errors, we add a new test `subscribe_fails_if_there_is_a_fatal_database_error` and look at the logs.
+* `sqlx` logs are spammy so so we can reduce noise by:
+  * ```
+      export RUST_LOG="sqlx=error,info"
+      export TEST_LOG=true
+      cargo t subscribe_fails_if_there_is_a_fatal_database_error | bunyan
+    ```
+* We will see an error message in the logs: `"Failed to execute query: column "subscription_token" of relation "subscription_tokens" does not exist"`, which could tell us what the issue is, but it would be nice if the HTTP error that returned 500 can include details on the underlying issue in the `exception.details` and `exception.message`.
+
+### Keeping Track Of The Error Root Cause
+* The "Failed to execute query:" part of the error log came from the `execute` call in `store_subscription_token`.
+* We propagate the error upwards using the `?` operator, but the chain breaks in `subscribe` - we discard the error we received from `store_subscription_token` and return a bare 500 response.
+* `HttpResponse::InternalServerError().finish()` is the only thing that `actix_web` and `tracing_actix_web::TracingLogger` get to access when they are about to emit their respective log records.
+  * The error does not contain any context about the **underlying root cause**, therefore the log records are equally useless.
+* To fix it, we can implement `ResponseError` for our errors like `impl ResponseError for sqlx::Error {}`
+* But the compiler gives us an error: `sqlx::Error is not defined in the current crate`.
+  * This is Rust's orphan rule: it is forbidden to implement a foreign trait for a foreign type, where the foreign type stands for "from another crate".
+  * This restriction is meant to preserve coherence: imagine if you added a dependency that defined its own implementation of ResponseError for `sqlx::Error` - which one should the compiler use when the trait methods are invoked?
+* Orphan rule aside, it would still be a mistake for us to implement `ResponseError` for `sqlx::Error`.
+  * We want to return a "500 Internal Server Error" when we run into a `sqlx::Error` while trying to persist a subscriber token.
+  * In another circumstance we might wish to handle a `sqlx::Error` differently.
+  * So, we wrap the underlying error `sqlx::Error` into `StoreTokenError` and implement `ResponseError` on that.
+  * We would now need to implement `Display` and `Debug` traits for `StoreTokenError`.
+    * `Display` should return a programmer-facing representation, as faithful as possible to the underlying type structure, to help with debugging.
+    * `Debug` should return a user-facing representation of the underlying type.
+* We can now use this in the request handler:
+  * We will now have to wrap (early) returns `subscribe` in `Ok(...)` as well
+  * The `?` operator transparently invokes the `Into` trait on our behalf - we don't need an explicit `map_err` anymore when we call `store_subscription_token`.
+  * Now, when we run the `subscribe_fails_if_there_is_a_fatal_database_error` test with sqlx logs, we will see the exception message contains: "A database error was encountered while trying to store a subscription token."

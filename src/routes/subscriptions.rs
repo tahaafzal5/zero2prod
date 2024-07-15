@@ -1,6 +1,6 @@
 use std::fmt::{Debug, Display};
 
-use actix_web::{web, HttpResponse, ResponseError};
+use actix_web::{http::StatusCode, web, HttpResponse, ResponseError};
 use chrono::Utc;
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use sqlx::{Executor, PgPool, Postgres, Transaction};
@@ -11,9 +11,58 @@ use crate::{
     email_client::EmailClient,
 };
 
-pub struct StoreTokenError(sqlx::Error);
+#[derive(Debug)]
+pub enum SubscribeError {
+    ValidationError(String),
+    DatabseError(sqlx::Error),
+    StoreTokenError(StoreTokenError),
+    SendEmailError(reqwest::Error),
+}
 
-impl ResponseError for StoreTokenError {}
+impl Display for SubscribeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Failed to create a new subscriber.")
+    }
+}
+
+impl std::error::Error for SubscribeError {}
+
+impl ResponseError for SubscribeError {
+    fn status_code(&self) -> StatusCode {
+        match self {
+            SubscribeError::ValidationError(_) => StatusCode::BAD_REQUEST,
+            SubscribeError::DatabseError(_)
+            | SubscribeError::StoreTokenError(_)
+            | Self::SendEmailError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        }
+    }
+}
+
+impl From<reqwest::Error> for SubscribeError {
+    fn from(error: reqwest::Error) -> Self {
+        Self::SendEmailError(error)
+    }
+}
+
+impl From<sqlx::Error> for SubscribeError {
+    fn from(error: sqlx::Error) -> Self {
+        Self::DatabseError(error)
+    }
+}
+
+impl From<StoreTokenError> for SubscribeError {
+    fn from(error: StoreTokenError) -> Self {
+        Self::StoreTokenError(error)
+    }
+}
+
+impl From<String> for SubscribeError {
+    fn from(error: String) -> Self {
+        Self::ValidationError(error)
+    }
+}
+
+pub struct StoreTokenError(sqlx::Error);
 
 impl std::error::Error for StoreTokenError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
@@ -72,11 +121,8 @@ pub async fn subscribe(
     connection_pool: web::Data<PgPool>,
     email_client: web::Data<EmailClient>,
     base_url: web::Data<String>,
-) -> Result<HttpResponse, actix_web::Error> {
-    let new_subscriber: NewSubscriber = match form.0.try_into() {
-        Ok(subscriber) => subscriber,
-        Err(_) => return Ok(HttpResponse::BadRequest().finish()),
-    };
+) -> Result<HttpResponse, SubscribeError> {
+    let new_subscriber: NewSubscriber = form.0.try_into()?;
 
     let subscription_token =
         match get_subscription_token_if_subscriber_exists(&connection_pool, &new_subscriber.email)
@@ -88,46 +134,30 @@ pub async fn subscribe(
         };
 
     if subscription_token.is_none() {
-        let mut transaction = match connection_pool.begin().await {
-            Ok(transaction) => transaction,
-            Err(_) => return Ok(HttpResponse::InternalServerError().finish()),
-        };
+        let mut transaction = connection_pool.begin().await?;
 
-        let subsriber_id = match insert_subscriber(&new_subscriber, &mut transaction).await {
-            Ok(subscriber_id) => subscriber_id,
-            Err(_) => return Ok(HttpResponse::InternalServerError().finish()),
-        };
+        let subsriber_id = insert_subscriber(&new_subscriber, &mut transaction).await?;
 
         let subscription_token = generate_subscription_token();
         store_subscription_token(&mut transaction, &subsriber_id, &subscription_token).await?;
 
-        if transaction.commit().await.is_err() {
-            return Ok(HttpResponse::InternalServerError().finish());
-        }
+        transaction.commit().await?;
 
-        if send_confirmation_email(
+        send_confirmation_email(
             &email_client,
             &new_subscriber,
             &base_url,
             &subscription_token,
         )
-        .await
-        .is_err()
-        {
-            return Ok(HttpResponse::InternalServerError().finish());
-        }
+        .await?;
     } else {
-        if send_confirmation_email(
+        send_confirmation_email(
             &email_client,
             &new_subscriber,
             &base_url,
             &subscription_token.unwrap(),
         )
-        .await
-        .is_err()
-        {
-            return Ok(HttpResponse::InternalServerError().finish());
-        }
+        .await?;
     }
 
     return Ok(HttpResponse::Ok().finish());

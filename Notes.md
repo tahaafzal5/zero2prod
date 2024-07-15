@@ -247,6 +247,9 @@
     - [The `Error` Trait](#the-error-trait)
       - [Trait Objects](#trait-objects)
       - [`Error::source`](#errorsource)
+  - [Errors For Control Flow](#errors-for-control-flow)
+    - [Layering](#layering)
+    - [Modeling Errors as Enums](#modeling-errors-as-enums)
 
 # Preface
 
@@ -1717,3 +1720,21 @@ curl "https://api.postmarkapp.com/email" \
 * Using `source` we can write a function that provides a similar representation for any type that implements `Error`.
   * `error_chain_fmt` iterates over the whole chain of errors that led to the failure we are trying to print.
   * We can then change our implementation of `Debug` for `StoreTokenError` to use it.
+
+## Errors For Control Flow
+
+### Layering
+* We got good logs, but had to implement a trait from our web framework (`ResponseError`) for an error type returned by an operation that is unaware of REST or the HTTP protocol, `store_token`.
+* We could be calling store_token from a different entry-point (e.g. a CLI) - nothing should have to change in its implementation.
+* Even assuming we are only ever going to be calling `store_token` in the context of a REST API, we might add other endpoints that rely on that routine - they might not want to return a 500 when it fails.
+* Choosing the appropriate HTTP status code when an error occurs is a concern of the request handler, it should not leak elsewhere, so we delete `ResponseError`.
+* To enforce a proper separation of concerns we need to introduce another error type, `SubscribeError`.
+  * We will use it as failure variant for `subscribe` and it will own the HTTP-related logic (`ResponseError`’s implementation).
+* This will result in an avalanche of `?` couldn't convert the error to `SubscribeError` - so we need to implement conversions from the error types returned by our functions and `SubscribeError`.
+
+### Modeling Errors as Enums
+* An enum is the most common approach to work around this issue: a variant for each error type we need to deal with.
+  * We can then leverage the `?` operator in our handler by providing a `From` implementation for each of wrapped error types.
+  * And we should be able to clean up all our request handlers by removing all the `match/if fallible_function().is_err()` lines and use `?` instead.
+  * Code compiles but the `subscriptions::subscribe_returns_a_400_when_fields_are_present_but_invalid` test fails since we are using the default implementation of `ResponseError` that always returns 500.
+  * We can fix this by providing an implementation for `ResponseError` to use a `match` statement for control flow - we behave differently depending on the failure scenario we are dealing with.

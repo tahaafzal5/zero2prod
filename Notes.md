@@ -244,6 +244,9 @@
       - [Help A User To Troubleshoot](#help-a-user-to-troubleshoot)
   - [Error Reporting For Operators](#error-reporting-for-operators)
     - [Keeping Track Of The Error Root Cause](#keeping-track-of-the-error-root-cause)
+    - [The `Error` Trait](#the-error-trait)
+      - [Trait Objects](#trait-objects)
+      - [`Error::source`](#errorsource)
 
 # Preface
 
@@ -1694,3 +1697,23 @@ curl "https://api.postmarkapp.com/email" \
   * We will now have to wrap (early) returns `subscribe` in `Ok(...)` as well
   * The `?` operator transparently invokes the `Into` trait on our behalf - we don't need an explicit `map_err` anymore when we call `store_subscription_token`.
   * Now, when we run the `subscribe_fails_if_there_is_a_fatal_database_error` test with sqlx logs, we will see the exception message contains: "A database error was encountered while trying to store a subscription token."
+
+### The `Error` Trait
+* What is the point of implementing the `Error` trait at all for our error type?
+  * The `Error` trait is a way to semantically mark our type as being an error. It helps a reader of our codebase to immediately spot its purpose.
+  * It is also a way for the Rust community to standardize on the minimum requirements for a good error:
+    * it should provide different representations (`Debug` and `Display`), tuned to different audiences
+    * it should be possible to look at the underlying cause of the error, if any (`source`)
+
+#### Trait Objects
+* Trait objects, just like generic type parameters, are a way to achieve polymorphism in Rust: invoke different implementations of the same interface.
+* Generic types are resolved at compile-time (static dispatch), trait objects incur a runtime cost (dynamic dispatch).
+
+#### `Error::source`
+* We will implement `Error` for `StoreTokenError`.
+* `source` is useful when writing code that needs to handle a variety of errors: it provides a structured way to navigate the error chain without having to know anything about the specific error type you are working with.
+* If we look at our log record, the causal relationship between `StoreTokenError` and `sqlx::Error` is somewhat implicit - we infer one is the cause of the other because *it is a part of it*.
+  * To make it more explicit, we can implement `Debug` on `StoreTokenError`.
+* Using `source` we can write a function that provides a similar representation for any type that implements `Error`.
+  * `error_chain_fmt` iterates over the whole chain of errors that led to the failure we are trying to print.
+  * We can then change our implementation of `Debug` for `StoreTokenError` to use it.

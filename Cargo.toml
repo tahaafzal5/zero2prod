@@ -28,6 +28,7 @@ validator = "0.16"
 reqwest = { version = "0.11", features = ["json"] }
 rand = { version = "0.8", features = ["std_rng"] }
 thiserror = "1"
+anyhow = "1"
 
 # We need the optional `derive` feature to use `serde`'s procedural macros:
 # `#[derive(Serialize)]` and `#[derive(Deserialize)]`.

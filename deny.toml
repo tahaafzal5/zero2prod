@@ -1,2 +1,5 @@
 [advisories]
-unmaintained = "warn"
+ignore = [
+    # Ignoring warnings for any unmaintained crates
+    "RUSTSEC-2024-0357",
+]

@@ -87,8 +87,17 @@ async fn get_confirmed_subscribers(
 
     let confirmed_subscribers = rows
         .into_iter()
-        .map(|row| ConfirmedSubscriber {
-            email: SubscriberEmail::parse(row.email).unwrap(),
+        .filter_map({
+            |row| match SubscriberEmail::parse(row.email) {
+                Ok(email) => Some(ConfirmedSubscriber { email }),
+                Err(error) => {
+                    tracing::warn!(
+                        "A confirmed subscriber is using an invalid email address.\n{}",
+                        error
+                    );
+                    None
+                }
+            }
         })
         .collect();
 

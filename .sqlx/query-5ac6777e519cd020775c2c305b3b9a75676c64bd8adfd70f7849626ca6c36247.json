@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT user_id\n        FROM users\n        WHERE username = $1 AND password = $2",
+  "query": "SELECT user_id\n        FROM users\n        WHERE username = $1 AND password_hash = $2",
   "describe": {
     "columns": [
       {
@@ -19,5 +19,5 @@
       false
     ]
   },
-  "hash": "bf8297eba8d6281d4f2f1fc9f39d747ca96c25a071389fbbccff7f425c57303b"
+  "hash": "5ac6777e519cd020775c2c305b3b9a75676c64bd8adfd70f7849626ca6c36247"
 }

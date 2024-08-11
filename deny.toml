@@ -2,4 +2,5 @@
 ignore = [
     # Ignoring warnings for any unmaintained crates
     "RUSTSEC-2024-0357",
+    "RUSTSEC-2024-0320",
 ]

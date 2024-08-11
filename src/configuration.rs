@@ -91,7 +91,7 @@ impl DatabaseSettings {
 
 impl EmailClientSettings {
     pub fn sender_email(&self) -> Result<SubscriberEmail, String> {
-        SubscriberEmail::parse(self.sender_email.clone())
+        SubscriberEmail::parse(&self.sender_email)
     }
 
     pub fn timeout(&self) -> std::time::Duration {

@@ -3,7 +3,7 @@ use sqlx::{Connection, Executor, PgConnection, PgPool};
 use uuid::Uuid;
 use wiremock::MockServer;
 use zero2prod::configuration::{get_configuration, DatabaseSettings};
-use zero2prod::routes::subscriptions_route;
+use zero2prod::routes::{publish_newsletter_route, subscriptions_route};
 use zero2prod::startup::{get_connection_pool, header, Application};
 use zero2prod::telemetry::{get_subscriber, init_subscriber};
 
@@ -61,7 +61,14 @@ impl TestApp {
         ConfirmationLinks { html, plain_text }
     }
 
-    
+    pub async fn post_newsletters(&self, body: &serde_json::Value) -> reqwest::Response {
+        reqwest::Client::new()
+            .post(&format!("{}{}", &self.address, publish_newsletter_route()))
+            .json(&body)
+            .send()
+            .await
+            .expect("Failed to execute request.")
+    }
 }
 
 // Ensure that the `tracing` stack is only initialised once using `once_cell`

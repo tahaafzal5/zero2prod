@@ -1,5 +1,6 @@
-use crate::routes::error_chain_fmt;
+use crate::{domain::SubscriberEmail, email_client::EmailClient, routes::error_chain_fmt};
 use actix_web::{web, HttpResponse, ResponseError};
+use anyhow::Context;
 use reqwest::StatusCode;
 use sqlx::PgPool;
 use std::fmt::Debug;
@@ -17,7 +18,7 @@ pub struct Content {
 }
 
 struct ConfirmedSubscriber {
-    email: String,
+    email: SubscriberEmail,
 }
 
 #[derive(thiserror::Error)]
@@ -43,8 +44,21 @@ impl ResponseError for PublishError {
 pub async fn publish_newsletter(
     connection_pool: web::Data<PgPool>,
     body: web::Json<BodyData>,
+    email_client: web::Data<EmailClient>,
 ) -> Result<HttpResponse, PublishError> {
     let confirmed_subscribers = get_confirmed_subscribers(&connection_pool).await?;
+
+    for subscriber in confirmed_subscribers {
+        email_client
+            .send_email(
+                &subscriber.email,
+                &body.title,
+                &body.content.html,
+                &body.content.text,
+            )
+            .await
+            .with_context(|| format!("Failed to send newsletter issue to {}", subscriber.email))?;
+    }
 
     Ok(HttpResponse::Ok().finish())
 }
@@ -52,8 +66,16 @@ pub async fn publish_newsletter(
 async fn get_confirmed_subscribers(
     pool: &PgPool,
 ) -> Result<Vec<ConfirmedSubscriber>, anyhow::Error> {
+    // We only need `Row` to map the data coming out of this query.
+    // Nesting its definition inside the function is a simple way
+    // to clearly communicate this coupling (and to ensure it doesn't
+    // get used elsewhere by mistake).
+    struct Row {
+        email: String,
+    }
+
     let rows = sqlx::query_as!(
-        ConfirmedSubscriber,
+        Row,
         r#"
         SELECT email
         FROM subscriptions
@@ -63,7 +85,14 @@ async fn get_confirmed_subscribers(
     .fetch_all(pool)
     .await?;
 
-    Ok(rows)
+    let confirmed_subscribers = rows
+        .into_iter()
+        .map(|row| ConfirmedSubscriber {
+            email: SubscriberEmail::parse(row.email).unwrap(),
+        })
+        .collect();
+
+    Ok(confirmed_subscribers)
 }
 
 pub fn publish_newsletter_route() -> String {

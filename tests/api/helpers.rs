@@ -60,6 +60,8 @@ impl TestApp {
 
         ConfirmationLinks { html, plain_text }
     }
+
+    
 }
 
 // Ensure that the `tracing` stack is only initialised once using `once_cell`

@@ -49,33 +49,45 @@ pub async fn publish_newsletter(
     let confirmed_subscribers = get_confirmed_subscribers(&connection_pool).await?;
 
     for subscriber in confirmed_subscribers {
-        email_client
-            .send_email(
-                &subscriber.email,
-                &body.title,
-                &body.content.html,
-                &body.content.text,
-            )
-            .await
-            .with_context(|| format!("Failed to send newsletter issue to {}", subscriber.email))?;
+        match subscriber {
+            Ok(subscriber) => {
+                email_client
+                    .send_email(
+                        &subscriber.email,
+                        &body.title,
+                        &body.content.html,
+                        &body.content.text,
+                    )
+                    .await
+                    .with_context(|| {
+                        format!("Failed to send newsletter issue to {}", subscriber.email)
+                    })?;
+            }
+            Err(error) => {
+                tracing::warn!(
+                    // We record the error chain as a structured field
+                    // on the log record
+                    error.cause_chain = ?error,
+                    "Skipping a confirmed subscriber with email.\
+                    Their stored contact details are invalid",
+                );
+            }
+        }
     }
 
     Ok(HttpResponse::Ok().finish())
 }
 
+#[tracing::instrument(name = "Get confirmed subscribers", skip(pool))]
 async fn get_confirmed_subscribers(
     pool: &PgPool,
-) -> Result<Vec<ConfirmedSubscriber>, anyhow::Error> {
-    // We only need `Row` to map the data coming out of this query.
-    // Nesting its definition inside the function is a simple way
-    // to clearly communicate this coupling (and to ensure it doesn't
-    // get used elsewhere by mistake).
-    struct Row {
-        email: String,
-    }
-
-    let rows = sqlx::query_as!(
-        Row,
+    // We are returning a `Vec` of `Result`s in the happy case.
+    // This allows the caller to bubble up errors due to network issues or other
+    // transient failures using the `?` operator, while the compiler
+    // forces them to handle the subtler mapping error.
+    // See http://sled.rs/errors.html
+) -> Result<Vec<Result<ConfirmedSubscriber, anyhow::Error>>, anyhow::Error> {
+    let rows = sqlx::query!(
         r#"
         SELECT email
         FROM subscriptions
@@ -87,18 +99,9 @@ async fn get_confirmed_subscribers(
 
     let confirmed_subscribers = rows
         .into_iter()
-        .filter_map({
-            |row| match SubscriberEmail::parse(&row.email) {
-                Ok(email) => Some(ConfirmedSubscriber { email }),
-                Err(error) => {
-                    tracing::warn!(
-                        "A confirmed subscriber is using an invalid email address: {}\n{}",
-                        &row.email,
-                        error
-                    );
-                    None
-                }
-            }
+        .map(|row| match SubscriberEmail::parse(&row.email) {
+            Ok(email) => Ok(ConfirmedSubscriber { email }),
+            Err(error) => Err(anyhow::anyhow!(error)),
         })
         .collect();
 

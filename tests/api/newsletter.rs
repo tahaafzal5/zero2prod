@@ -1,5 +1,5 @@
 use wiremock::{matchers::method, matchers::path, Mock, ResponseTemplate};
-use zero2prod::{email_client::email_route, routes::publish_newsletter_route};
+use zero2prod::email_client::email_route;
 
 use crate::helpers::{spawn_app, ConfirmationLinks, TestApp};
 
@@ -28,12 +28,7 @@ async fn newsletters_are_not_delivered_to_unconfirmed_subscribers() {
         }
     });
 
-    let response = reqwest::Client::new()
-        .post(&format!("{}{}", &app.address, publish_newsletter_route()))
-        .json(&newsletter_request_body)
-        .send()
-        .await
-        .expect("Failed to execute request.");
+    let response = app.post_newsletters(&newsletter_request_body).await;
 
     // Assert
     assert_eq!(response.status().as_u16(), 200);
@@ -61,12 +56,7 @@ async fn newsletters_are_delivered_to_confirmed_subscribers() {
         }
     });
 
-    let response = reqwest::Client::new()
-        .post(&format!("{}{}", &app.address, publish_newsletter_route()))
-        .json(&newsletter_request_body)
-        .send()
-        .await
-        .expect("Failed to execute request.");
+    let response = app.post_newsletters(&newsletter_request_body).await;
 
     // Assert
     assert_eq!(response.status().as_u16(), 200);
@@ -93,12 +83,7 @@ async fn newsletters_returns_400_for_invalid_data() {
 
     for (invalid_body, error_message) in test_cases {
         // Act
-        let response = reqwest::Client::new()
-            .post(&format!("{}{}", &app.address, publish_newsletter_route()))
-            .json(&invalid_body)
-            .send()
-            .await
-            .expect("Failed to execute request.");
+        let response = app.post_newsletters(&invalid_body).await;
 
         // Assert
         assert_eq!(

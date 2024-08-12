@@ -10,3 +10,12 @@ Learning Rust using [Zero To Production In Rust: An introduction to backend deve
 
 ## New Query
 * Whenever a new sqlx query is added to the code, run `cargo sqlx prepare` to generate a query for the offline version of the db (used in Github actions)
+
+## Add a new migration
+`sqlx migrate add <migration name>` 
+
+## Apply the migrations to the local, development database
+`sqlx migrate run` while the docker container is running.
+
+## Migrate the production database on Digital Ocean
+`DATABASE_URL=DIGITAL-OCEAN-DB-CONNECTION-STRING sqlx migrate run`

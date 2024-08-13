@@ -153,6 +153,37 @@ async fn non_existing_user_is_rejected() {
     );
 }
 
+#[tokio::test]
+async fn invalid_password_is_rejected() {
+    // Arrange
+    let app = spawn_app().await;
+    let username = Uuid::new_v4().to_string();
+    let password = Uuid::new_v4().to_string();
+    assert_ne!(app.test_user.password, password);
+
+    // Act
+    let response = reqwest::Client::new()
+        .post(&format!("{}{}", &app.address, publish_newsletter_route()))
+        .basic_auth(username, Some(password))
+        .json(&serde_json::json!({
+            "title": "Newsletter title",
+            "content": {
+                "text": "Newsletter body as plain text",
+                "html": "<p>Newsletter body as HTML</p>",
+            }
+        }))
+        .send()
+        .await
+        .expect("Failed to execure request");
+
+    // Assert
+    assert_eq!(401, response.status().as_u16());
+    assert_eq!(
+        r#"Basic realm="publish""#,
+        response.headers()["WWW-Authenticate"]
+    );
+}
+
 /// Use the public API of the application under test to create
 /// and unconfirmed subscriber
 async fn create_unconfirmed_subscriber(app: &TestApp) -> ConfirmationLinks {

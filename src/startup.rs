@@ -2,8 +2,8 @@ use crate::{
     configuration::{DatabaseSettings, Settings},
     email_client::{subscriptions_confirm_route, EmailClient},
     routes::{
-        confirm, health_check, health_check_route, home, home_route, publish_newsletter,
-        publish_newsletter_route, subscribe, subscriptions_route,
+        confirm, health_check, health_check_route, home, home_route, login, login_form,
+        login_route, publish_newsletter, publish_newsletter_route, subscribe, subscriptions_route,
     },
 };
 
@@ -93,6 +93,8 @@ pub fn run(
                 web::post().to(publish_newsletter),
             )
             .route(&home_route(), web::get().to(home))
+            .route(&login_route(), web::get().to(login_form))
+            .route(&login_route(), web::post().to(login))
             .app_data(connection_pool.clone())
             .app_data(email_client.clone())
             .app_data(base_url.clone())

@@ -76,6 +76,8 @@ struct Credentials {
     password: Secret<String>,
 }
 
+/// Extracts the credentials from the `Authorization` header when using the 'Basic' authentication
+/// scheme.
 fn basic_authentication(headers: &HeaderMap) -> Result<Credentials, anyhow::Error> {
     // The header value, if present, must be a valid UTF8 string
     let header_value = headers

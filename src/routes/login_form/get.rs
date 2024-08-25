@@ -8,7 +8,12 @@ pub struct QueryParams {
 pub async fn login_form(query: web::Query<QueryParams>) -> HttpResponse {
     let error_html = match query.0.error {
         None => "".into(),
-        Some(error_message) => format!("<p><i>{error_message}</i></p>"),
+        // Encode the error message to prevent XSS attacks
+        // since the error message is being injected into the HTML
+        Some(error_message) => format!(
+            "<p><i>{}</i></p>",
+            htmlescape::encode_minimal(&error_message)
+        ),
     };
     
     HttpResponse::Ok()

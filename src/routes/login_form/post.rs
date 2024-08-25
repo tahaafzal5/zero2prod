@@ -8,6 +8,8 @@ use crate::{
     routes::{error_chain_fmt, home_route},
 };
 
+use super::login_route;
+
 #[derive(serde::Deserialize)]
 pub struct FormData {
     email: String,
@@ -29,11 +31,17 @@ impl std::fmt::Debug for LoginError {
 }
 
 impl ResponseError for LoginError {
-    fn status_code(&self) -> reqwest::StatusCode {
+    fn status_code(&self) -> StatusCode {
         match self {
             LoginError::AuthError(_) => StatusCode::UNAUTHORIZED,
             LoginError::UnexpectedError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
+    }
+
+    fn error_response(&self) -> HttpResponse<actix_web::body::BoxBody> {
+        HttpResponse::SeeOther()
+            .insert_header((LOCATION, login_route()))
+            .finish()
     }
 }
 

@@ -19,3 +19,14 @@ Learning Rust using [Zero To Production In Rust: An introduction to backend deve
 
 ## Migrate the production database on Digital Ocean
 `DATABASE_URL=DIGITAL-OCEAN-DB-CONNECTION-STRING sqlx migrate run`
+
+## Common API Usage
+
+### GET /health_check
+`curl --request GET localhost:8000/health_check --verbose`
+
+### POST /subscribe
+`curl --request POST --data 'name=John%20Doe&email=john.doe%40gmail.com' localhost:8000/subscriptions --verbose`
+
+### POST /subscriptions/confirm
+`curl "localhost:8000/subscriptions/confirm?subscription_token=<subscription-token>"`

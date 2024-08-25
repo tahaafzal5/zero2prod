@@ -13,7 +13,7 @@ pub enum AuthError {
 }
 
 pub struct Credentials {
-    pub username: String,
+    pub email: String,
     pub password: Secret<String>,
 }
 
@@ -31,7 +31,7 @@ pub async fn validate_credentials(
     );
 
     if let Some((stored_user_id, stored_password_hash)) =
-        get_stored_credentials(&credentials.username, connection_pool)
+        get_stored_credentials(&credentials.email, connection_pool)
             .await
             .map_err(AuthError::UnexpectedError)?
     {

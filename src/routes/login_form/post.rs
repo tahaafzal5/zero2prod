@@ -38,9 +38,14 @@ impl ResponseError for LoginError {
         }
     }
 
-    fn error_response(&self) -> HttpResponse<actix_web::body::BoxBody> {
+    fn error_response(&self) -> HttpResponse {
+        let encoded_error = urlencoding::Encoded::new(self.to_string());
+
         HttpResponse::SeeOther()
-            .insert_header((LOCATION, login_route()))
+            .insert_header((
+                LOCATION,
+                format!("{}?error={}", login_route(), encoded_error),
+            ))
             .finish()
     }
 }

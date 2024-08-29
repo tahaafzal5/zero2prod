@@ -1,5 +1,8 @@
 application:
   port: 8000
+  # Corresponds to `APP_APPLICATION__HMAC_SECRET` environment variable
+  # on DigitalOcean for production
+  hmac_secret: "long-and-vert-secret-random-key-needed-to-verify-message-integrity"
 database:
   host: 127.0.0.1
   port: 5432

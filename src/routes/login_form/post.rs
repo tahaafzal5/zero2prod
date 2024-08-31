@@ -14,7 +14,7 @@ pub struct HmacSecret(pub Secret<String>);
 
 #[derive(serde::Deserialize)]
 pub struct FormData {
-    email: String,
+    username: String,
     password: Secret<String>,
 }
 
@@ -42,11 +42,11 @@ pub async fn login(
     secret: web::Data<HmacSecret>,
 ) -> Result<HttpResponse, InternalError<LoginError>> {
     let credentials = Credentials {
-        email: form.0.email,
+        username: form.0.username,
         password: form.0.password,
     };
 
-    tracing::Span::current().record("email", &tracing::field::display(&credentials.email));
+    tracing::Span::current().record("username", &tracing::field::display(&credentials.username));
     match validate_credentials(credentials, &pool).await {
         Ok(user_id) => {
             tracing::Span::current().record("user_id", &tracing::field::display(&user_id));

@@ -74,7 +74,7 @@ impl TestApp {
             .body(body)
             .send()
             .await
-            .expect("Failed to execute POST request")
+            .expect("Failed to execute POST subscription request")
     }
 
     pub fn get_confirmation_links(&self, email_request: &wiremock::Request) -> ConfirmationLinks {
@@ -111,7 +111,7 @@ impl TestApp {
             .json(&body)
             .send()
             .await
-            .expect("Failed to execute request.")
+            .expect("Failed to execute POST newsletter request.")
     }
 }
 

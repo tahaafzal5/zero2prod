@@ -101,7 +101,7 @@ fn basic_authentication(headers: &HeaderMap) -> Result<Credentials, anyhow::Erro
         .to_string();
 
     Ok(Credentials {
-        email: username,
+        username,
         password: Secret::new(password),
     })
 }
@@ -118,7 +118,7 @@ pub async fn publish_newsletter(
     request: HttpRequest,
 ) -> Result<HttpResponse, PublishError> {
     let credentials = basic_authentication(request.headers()).map_err(PublishError::AuthError)?;
-    tracing::Span::current().record("username", tracing::field::display(&credentials.email));
+    tracing::Span::current().record("username", tracing::field::display(&credentials.username));
 
     let user_id = validate_credentials(credentials, &connection_pool)
         .await

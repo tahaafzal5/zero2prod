@@ -61,8 +61,8 @@ pub async fn login_form(
 <body>
     {error_html}
     <form action="/login" method="post">
-        <label>Email Address
-            <input type="text" placeholder="Enter your email address" name="email">
+        <label>Username
+            <input type="text" placeholder="Enter username" name="username">
         </label>
 
         <label>Password

@@ -112,13 +112,13 @@ pub fn run(
 }
 
 pub struct PostRequestHeader {
-    pub name: String,
-    pub value: String,
+    pub name: &'static str,
+    pub value: &'static str,
 }
 
 pub fn header() -> PostRequestHeader {
     PostRequestHeader {
-        name: String::from("Content-Type"),
-        value: String::from("application/x-www-form-urlencoded"),
+        name: "Content-Type",
+        value: "application/x-www-form-urlencoded",
     }
 }

@@ -70,7 +70,10 @@ impl TestApp {
 
         reqwest::Client::new()
             .post(request)
-            .header(&post_request_header.name, &post_request_header.value)
+            .header(
+                &post_request_header.name.to_string(),
+                &post_request_header.value.to_string(),
+            )
             .body(body)
             .send()
             .await

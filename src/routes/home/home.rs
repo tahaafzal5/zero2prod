@@ -6,6 +6,6 @@ pub async fn home() -> HttpResponse {
         .body(include_str!("home.html"))
 }
 
-pub fn home_route() -> String {
-    String::from("/")
+pub fn home_route() -> &'static str {
+    "/"
 }

@@ -70,6 +70,6 @@ pub async fn login(
     }
 }
 
-pub fn flash_cookie_string() -> String {
-    String::from("_flash")
+pub fn flash_cookie_string() -> &'static str {
+    "_flash"
 }

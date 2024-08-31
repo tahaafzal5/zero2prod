@@ -190,6 +190,6 @@ async fn get_confirmed_subscribers(
     Ok(confirmed_subscribers)
 }
 
-pub fn publish_newsletter_route() -> String {
-    String::from("/newsletter")
+pub fn publish_newsletter_route() -> &'static str {
+    "/newsletter"
 }

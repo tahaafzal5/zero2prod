@@ -77,6 +77,6 @@ pub async fn login_form(
         ))
 }
 
-pub fn login_route() -> String {
-    String::from("/login")
+pub fn login_route() -> &'static str {
+    "/login"
 }

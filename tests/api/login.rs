@@ -22,8 +22,11 @@ async fn an_error_flash_message_is_set_on_failure() {
         .find(|c| c.name() == flash_cookie_string())
         .unwrap();
 
+    let html_page = app.get_login_html().await;
+
     // Assert
     assert_eq!(response.status().as_u16(), 303); // 303 is a redirect status code
     assert_is_redirect_to(&response, login_route());
     assert_eq!(flash_cookie.value(), "Authentication failed");
+    assert!(html_page.contains(r#"<p><i>Authentication failed</i></p>"#));
 }

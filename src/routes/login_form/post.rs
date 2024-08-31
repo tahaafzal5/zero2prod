@@ -71,10 +71,7 @@ pub async fn login(
             };
 
             let response = HttpResponse::SeeOther()
-                .insert_header((
-                    LOCATION,
-                    format!("{}?{}&tag={:x}", login_route(), query_string, hmac_tag),
-                ))
+                .insert_header((LOCATION, format!("/login?{query_string}&tag={hmac_tag:x}")))
                 .finish();
 
             Err(InternalError::from_response(error, response))

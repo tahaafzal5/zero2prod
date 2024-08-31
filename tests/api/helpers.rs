@@ -220,3 +220,8 @@ pub async fn configure_database(config: &DatabaseSettings) {
         .await
         .expect("Failed to migrate database");
 }
+
+pub fn assert_is_redirect_to(response: &reqwest::Response, location: &str) {
+    assert_eq!(response.status().as_u16(), 303);
+    assert_eq!(response.headers().get("LOCATION").unwrap(), location);
+}

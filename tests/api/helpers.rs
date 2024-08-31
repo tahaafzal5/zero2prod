@@ -61,6 +61,7 @@ pub struct TestApp {
     pub email_server: MockServer,
     pub port: u16,
     pub test_user: TestUser,
+    pub api_client: reqwest::Client,
 }
 
 impl TestApp {
@@ -68,7 +69,7 @@ impl TestApp {
         let post_request_header = header();
         let request = format!("{}{}", &self.address, subscriptions_route());
 
-        reqwest::Client::new()
+        self.api_client
             .post(request)
             .header(
                 &post_request_header.name.to_string(),
@@ -108,7 +109,7 @@ impl TestApp {
     }
 
     pub async fn post_newsletters(&self, body: &serde_json::Value) -> reqwest::Response {
-        reqwest::Client::new()
+        self.api_client
             .post(&format!("{}{}", &self.address, publish_newsletter_route()))
             .basic_auth(&self.test_user.username, Some(&self.test_user.password))
             .json(&body)
@@ -121,17 +122,23 @@ impl TestApp {
     where
         Body: serde::Serialize,
     {
-        reqwest::Client::builder()
-            // Setting the redirect policy to none so that our client does not
-            // actually follow the redirect in case of a failed login
-            .redirect(reqwest::redirect::Policy::none())
-            .build()
-            .unwrap()
+        self.api_client
             .post(&format!("{}{}", &self.address, login_route()))
             .form(body)
             .send()
             .await
             .expect("Failed to execute POST login request.")
+    }
+
+    pub async fn get_login_html(&self) -> String {
+        self.api_client
+            .get(&format!("{}{}", &self.address, login_route()))
+            .send()
+            .await
+            .expect("Failed to execure GET login request")
+            .text()
+            .await
+            .unwrap()
     }
 }
 
@@ -188,12 +195,21 @@ pub async fn spawn_app() -> TestApp {
     // Launch our application in the background
     tokio::spawn(application.run_until_stopped());
 
+    let client = reqwest::Client::builder()
+        // Setting the redirect policy to none so that our client does not
+        // actually follow the redirect in case of a failed login
+        .redirect(reqwest::redirect::Policy::none())
+        .cookie_store(true)
+        .build()
+        .unwrap();
+
     let test_app = TestApp {
         address,
         port,
         connection_pool: get_connection_pool(&configuration.database),
         email_server,
         test_user: TestUser::generate(),
+        api_client: client,
     };
 
     test_app.test_user.store(&test_app.connection_pool).await;

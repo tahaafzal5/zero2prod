@@ -12,8 +12,6 @@ use crate::{
 #[derive(Clone)]
 pub struct HmacSecret(pub Secret<String>);
 
-use super::login_route;
-
 #[derive(serde::Deserialize)]
 pub struct FormData {
     email: String,

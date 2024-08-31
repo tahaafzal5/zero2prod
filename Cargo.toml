@@ -25,7 +25,6 @@ secrecy = { version = "0.8", features = ["serde"] }
 unicode-segmentation = "1"
 claims = "0.7"
 validator = "0.16"
-reqwest = { version = "0.11", features = ["json"] }
 rand = { version = "0.8", features = ["std_rng"] }
 thiserror = "1"
 anyhow = "1"
@@ -56,6 +55,10 @@ features = [
     "chrono",               # adds support for mapping SQL timestamptz to the DateTime<T> type from the chrono crate
     "migrate",              # gives us access to the same functions used under the hood by sqlx-cli to manage migrations so we use them in our test suite
 ]
+
+[dependencies.reqwest]
+version = "0.11"
+features = ["json", "cookies"]
 
 # Dependencies for tests and examples
 [dev-dependencies]

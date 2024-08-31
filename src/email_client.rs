@@ -69,12 +69,12 @@ impl EmailClient {
     }
 }
 
-pub fn email_route() -> String {
-    String::from("/email")
+pub fn email_route() -> &'static str {
+    "/email"
 }
 
-pub fn subscriptions_confirm_route() -> String {
-    String::from("/subscriptions/confirm")
+pub fn subscriptions_confirm_route() -> &'static str {
+    "/subscriptions/confirm"
 }
 
 #[cfg(test)]

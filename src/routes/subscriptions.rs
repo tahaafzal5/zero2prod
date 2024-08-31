@@ -264,6 +264,6 @@ async fn store_subscription_token(
     Ok(())
 }
 
-pub fn subscriptions_route() -> String {
-    String::from("/subscriptions")
+pub fn subscriptions_route() -> &'static str {
+    "/subscriptions"
 }

@@ -5,7 +5,7 @@ use sqlx::{Connection, Executor, PgConnection, PgPool};
 use uuid::Uuid;
 use wiremock::MockServer;
 use zero2prod::configuration::{get_configuration, DatabaseSettings};
-use zero2prod::routes::{publish_newsletter_route, subscriptions_route};
+use zero2prod::routes::{login_route, publish_newsletter_route, subscriptions_route};
 use zero2prod::startup::{get_connection_pool, header, Application};
 use zero2prod::telemetry::{get_subscriber, init_subscriber};
 
@@ -112,6 +112,23 @@ impl TestApp {
             .send()
             .await
             .expect("Failed to execute POST newsletter request.")
+    }
+
+    pub async fn post_login<Body>(&self, body: &Body) -> reqwest::Response
+    where
+        Body: serde::Serialize,
+    {
+        reqwest::Client::builder()
+            // Setting the redirect policy to none so that our client does not
+            // actually follow the redirect in case of a failed login
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .unwrap()
+            .post(&format!("{}{}", &self.address, login_route()))
+            .form(body)
+            .send()
+            .await
+            .expect("Failed to execute POST login request.")
     }
 }
 

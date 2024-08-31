@@ -146,6 +146,10 @@ static TRACING: Lazy<()> = Lazy::new(|| {
     }
 });
 
+/**
+ * Configures and starts a new instance of our app in the background for testing.
+ * Also configures the email server and the database etc needed for our app.
+ */
 pub async fn spawn_app() -> TestApp {
     // The first time `initialize` is invoked the code in `TRACING` is executed.
     // All other invocations will instead skip execution.
@@ -194,9 +198,9 @@ pub async fn spawn_app() -> TestApp {
     test_app
 }
 
-/*
-Create a new database with a new/random name for each test for test isolation.
-We then also need to run migrations on this new database.
+/**
+* Create a new database with a new/random name for each test for test isolation.
+* We then also need to run migrations on this new database.
 */
 pub async fn configure_database(config: &DatabaseSettings) {
     let mut connection = PgConnection::connect_with(&config.without_db())
